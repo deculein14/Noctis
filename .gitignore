@@ -1,6 +1,7 @@
 ﻿# Secrets & credentials — NEVER commit these
 .env
 .env.*
+!.env.example
 *.key
 *.pem
 secrets.*
@@ -21,3 +22,6 @@ Thumbs.db
 # Temp files
 *.tmp
 *.log
+
+__pycache__/
+*.egg-info/
