@@ -55,3 +55,35 @@ def check_master_password(master_password: str) -> bool:
         return decrypted == VERIFICATION_STRING
     except InvalidToken:
         return False
+
+class VaultSession:
+    def __init__(self):
+        self._key = None
+
+    @property
+    def is_unlocked(self) -> bool:
+        return self._key is not None
+
+    def unlock(self, master_password: str) -> bool:
+        if not check_master_password(master_password):
+            return False
+
+        meta = json.loads(Path(VAULT_META_FILENAME).read_text())
+        salt = base64.b64decode(meta["salt"])
+        self._key = derive_key(master_password, salt)
+        return True
+
+    def lock(self) -> None:
+        self._key = None
+
+    def encrypt(self, plaintext: str) -> bytes:
+        if not self.is_unlocked:
+            raise RuntimeError("Vault is locked. Call unlock() first.")
+        fernet = Fernet(self._key)
+        return fernet.encrypt(plaintext.encode("utf-8"))
+
+    def decrypt(self, ciphertext: bytes) -> str:
+        if not self.is_unlocked:
+            raise RuntimeError("Vault is locked. Call unlock() first.")
+        fernet = Fernet(self._key)
+        return fernet.decrypt(ciphertext).decode("utf-8")
