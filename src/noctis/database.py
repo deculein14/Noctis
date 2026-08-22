@@ -51,3 +51,23 @@ def get_all_entries():
     rows = cursor.fetchall()
     connection.close()
     return rows
+
+def update_entry(entry_id, title, username=None, encrypted_password=None, url=None, category=None):
+    connection = get_connection()
+    cursor = connection.cursor()
+    now = datetime.now(timezone.utc).isoformat()
+    cursor.execute("""
+        UPDATE entries
+        SET title = ?, username = ?, encrypted_password = ?, url = ?, category = ?, updated_at = ?
+        WHERE id = ?
+    """, (title, username, encrypted_password, url, category, now, entry_id))
+    connection.commit()
+    connection.close()
+
+
+def delete_entry(entry_id):
+    connection = get_connection()
+    cursor = connection.cursor()
+    cursor.execute("DELETE FROM entries WHERE id = ?", (entry_id,))
+    connection.commit()
+    connection.close()
