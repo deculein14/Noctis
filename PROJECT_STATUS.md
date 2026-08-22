@@ -1,7 +1,7 @@
 # Noctis — Project Status
 
 ## Current Step
-Step 9 complete. Ready to begin Step 10 — Authentication and Failed-Attempt Protection.
+Step 11 complete. Ready to begin Step 12 — Account Creation/Editing/Deletion.
 
 ## Completed Steps
 1. Git & GitHub setup — local repo initialized, private GitHub repo created, connected, pushed.
@@ -13,12 +13,14 @@ Step 9 complete. Ready to begin Step 10 — Authentication and Failed-Attempt Pr
 7. Security architecture (planning) — designed master password → salt → PBKDF2 → key → AES/Fernet encryption → verification token flow.
 8. Master-password system — salt generation, key derivation, verification token, implemented and tested in `security.py`.
 9. Encryption / key management — `VaultSession` class: in-memory key handling, encrypt/decrypt entries, lock/unlock. Tested end-to-end with real database writes.
+10. Authentication and failed-attempt protection — `LoginGuard` class: tracks failed attempts, escalating lockout delays (5s/15s/30s/60s), resets on success.
+11. Basic UI — Design system established (`UI_DESIGN.md`: dark theme, colors, typography, spacing). Built `LoginScreen` (first-run vs unlock detection, password masking, lockout integration). Wired into `main.py`. Tested full flow end-to-end.
 
 ## Current Task
-None in progress — awaiting confirmation to start Step 10.
+None in progress — awaiting confirmation to start Step 12.
 
 ## Next Planned Step
-Step 10 — Authentication and Failed-Attempt Protection (login flow using VaultSession, limiting/delaying repeated wrong master-password attempts).
+Step 12 — Account Creation/Editing/Deletion (build the vault view UI and wire it to database.py + VaultSession for real CRUD operations on password entries).
 
 ## Technology Stack
 - Language: Python 3.14.5
@@ -44,10 +46,9 @@ Step 10 — Authentication and Failed-Attempt Protection (login flow using Vault
 None currently.
 
 ## Important Unfinished Work
-- No login attempt limiting/lockout yet (Step 10).
-- No UI beyond a placeholder window — `ui.py` is still empty (Step 11).
-- No account creation/editing/deletion flow wired into the UI yet (Step 12).
+- No vault view yet — after login there is only a placeholder success message (no entry list, no add/edit/delete UI). This is Step 12.
 - No auto-lock timer yet (Step 15).
+- Planned future enhancement (not yet scheduled to a specific step): email alert to user's Gmail after 5 failed master-password attempts. Requires Gmail API/SMTP setup — good candidate for Step 16 (Security Hardening) or a dedicated step.
 
 ## Architecture Changes
 None yet beyond the initial plan.
