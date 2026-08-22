@@ -1,7 +1,7 @@
 # Noctis — Project Status
 
 ## Current Step
-Step 12 complete. Ready to begin Step 13 — Search and Categories.
+Step 14 complete. Ready to begin Step 15 — Auto-Lock.
 
 ## Completed Steps
 1. Git & GitHub setup — local repo initialized, private GitHub repo created, connected, pushed.
@@ -16,12 +16,14 @@ Step 12 complete. Ready to begin Step 13 — Search and Categories.
 10. Authentication and failed-attempt protection — `LoginGuard` class: tracks failed attempts, escalating lockout delays (5s/15s/30s/60s), resets on success.
 11. Basic UI — Design system established (`UI_DESIGN.md`: dark theme, colors, typography, spacing). Built `LoginScreen` (first-run vs unlock detection, password masking, lockout integration). Wired into `main.py`. Tested full flow end-to-end.
 12. Account creation/editing/deletion — Added `update_entry()`/`delete_entry()` to `database.py`. Built `VaultScreen` (list view, shared add/edit form, delete). Wired real encrypt/decrypt via `VaultSession`. Fixed missing `database.initialize_database()` call at startup. Tested full CRUD cycle end-to-end.
+13. Search and categories — Added `get_all_categories()` to `database.py`. Added live search box (filters by title/username) and category filter chips to `VaultScreen`. Added missing category field to add/edit form.
+14. Favorites — Added `toggle_favorite()` to `database.py`. Added star toggle per entry and a "Favorites" filter chip. Fixed an indentation-corruption bug in `ui.py` from manual editing by rebuilding and syntax-verifying the file.
 
 ## Current Task
-None in progress — awaiting confirmation to start Step 13.
+None in progress — awaiting confirmation to start Step 15.
 
 ## Next Planned Step
-Step 13 — Search and Categories (filter/search the entry list, assign and filter by category).
+Step 15 — Auto-Lock (lock the vault and require the master password again after a period of inactivity).
 
 ## Technology Stack
 - Language: Python 3.14.5
@@ -47,10 +49,9 @@ Step 13 — Search and Categories (filter/search the entry list, assign and filt
 None currently.
 
 ## Important Unfinished Work
-- No search or category filtering in the vault list yet (Step 13).
-- No favorites yet (Step 14).
 - No auto-lock timer yet (Step 15).
 - Planned future enhancement (not yet scheduled to a specific step): email alert to user's Gmail after 5 failed master-password attempts. Requires Gmail API/SMTP setup — good candidate for Step 16 (Security Hardening) or a dedicated step.
+- Polish item (do near the end, after core steps are done): add a Show/Hide (eye icon) toggle button next to the password field in the add/edit form, so the real password can be viewed without relying on copy-paste. Not tied to a specific numbered step.
 
 ## Architecture Changes
 None yet beyond the initial plan.
