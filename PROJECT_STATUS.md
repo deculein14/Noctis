@@ -1,7 +1,7 @@
 # Noctis — Project Status
 
 ## Current Step
-Step 14 complete. Ready to begin Step 15 — Auto-Lock.
+Step 15 complete. Ready to begin Step 16 — Security Hardening.
 
 ## Completed Steps
 1. Git & GitHub setup — local repo initialized, private GitHub repo created, connected, pushed.
@@ -18,12 +18,13 @@ Step 14 complete. Ready to begin Step 15 — Auto-Lock.
 12. Account creation/editing/deletion — Added `update_entry()`/`delete_entry()` to `database.py`. Built `VaultScreen` (list view, shared add/edit form, delete). Wired real encrypt/decrypt via `VaultSession`. Fixed missing `database.initialize_database()` call at startup. Tested full CRUD cycle end-to-end.
 13. Search and categories — Added `get_all_categories()` to `database.py`. Added live search box (filters by title/username) and category filter chips to `VaultScreen`. Added missing category field to add/edit form.
 14. Favorites — Added `toggle_favorite()` to `database.py`. Added star toggle per entry and a "Favorites" filter chip. Fixed an indentation-corruption bug in `ui.py` from manual editing by rebuilding and syntax-verifying the file.
+15. Auto-lock — Added `AUTO_LOCK_SECONDS` config (default 120s). `main.py` tracks mouse/keyboard/click activity window-wide and auto-locks (wipes in-memory key, returns to login) after inactivity timeout. Tested with shortened timeout.
 
 ## Current Task
-None in progress — awaiting confirmation to start Step 15.
+None in progress — awaiting confirmation to start Step 16.
 
 ## Next Planned Step
-Step 15 — Auto-Lock (lock the vault and require the master password again after a period of inactivity).
+Step 16 — Security Hardening (review the whole app for gaps; candidate items already identified: persisting LoginGuard state across restarts, and the planned Gmail failed-attempt email alert).
 
 ## Technology Stack
 - Language: Python 3.14.5
@@ -49,7 +50,6 @@ Step 15 — Auto-Lock (lock the vault and require the master password again afte
 None currently.
 
 ## Important Unfinished Work
-- No auto-lock timer yet (Step 15).
 - Planned future enhancement (not yet scheduled to a specific step): email alert to user's Gmail after 5 failed master-password attempts. Requires Gmail API/SMTP setup — good candidate for Step 16 (Security Hardening) or a dedicated step.
 - Polish item (do near the end, after core steps are done): add a Show/Hide (eye icon) toggle button next to the password field in the add/edit form, so the real password can be viewed without relying on copy-paste. Not tied to a specific numbered step.
 
