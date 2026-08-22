@@ -1,7 +1,7 @@
 # Noctis — Project Status
 
 ## Current Step
-Step 15 complete. Ready to begin Step 16 — Security Hardening.
+Step 16 (core items) complete. Next: Multi-User Login/Vaults (new step, inserted after Step 16).
 
 ## Completed Steps
 1. Git & GitHub setup — local repo initialized, private GitHub repo created, connected, pushed.
@@ -19,12 +19,13 @@ Step 15 complete. Ready to begin Step 16 — Security Hardening.
 13. Search and categories — Added `get_all_categories()` to `database.py`. Added live search box (filters by title/username) and category filter chips to `VaultScreen`. Added missing category field to add/edit form.
 14. Favorites — Added `toggle_favorite()` to `database.py`. Added star toggle per entry and a "Favorites" filter chip. Fixed an indentation-corruption bug in `ui.py` from manual editing by rebuilding and syntax-verifying the file.
 15. Auto-lock — Added `AUTO_LOCK_SECONDS` config (default 120s). `main.py` tracks mouse/keyboard/click activity window-wide and auto-locks (wipes in-memory key, returns to login) after inactivity timeout. Tested with shortened timeout.
+16. Security hardening (core items) — `LoginGuard` now persists failed-attempt count and lockout deadline to `login_guard.json`, surviving app restarts (closes a bypass where restarting reset the lockout). Added "Copy Password" button with 30-second clipboard auto-clear (only clears if clipboard still holds the same value). Documented but did not solve: OS-level file permission hardening, guaranteed in-memory key wipe timing — both accepted as v0.1 limitations.
 
 ## Current Task
-None in progress — awaiting confirmation to start Step 16.
+Planning a new step: Multi-User Login/Vaults. User wants a real login screen (Noctis title, email/username field, password field) supporting multiple separate user profiles, each with their own isolated master password and vault — not just cosmetic. This requires redesigning the identity/storage layer from Steps 6-9: per-user salt + verification token, per-user encrypted entries, and login-screen logic to detect known vs new email. Not yet started — planning stage only.
 
 ## Next Planned Step
-Step 16 — Security Hardening (review the whole app for gaps; candidate items already identified: persisting LoginGuard state across restarts, and the planned Gmail failed-attempt email alert).
+Multi-User Login/Vaults (new, inserted after Step 16). After that, resume original plan: Testing (17), Error Handling (18), Packaging (19), Final Security Review (20), v0.1.0 Release (21).
 
 ## Technology Stack
 - Language: Python 3.14.5
