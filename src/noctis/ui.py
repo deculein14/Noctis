@@ -104,14 +104,30 @@ class VaultScreen(tk.Frame):
         self.body_font = tkfont.Font(family="Segoe UI", size=12)
         self.hint_font = tkfont.Font(family="Segoe UI", size=10)
 
-        self.list_frame = None
-        self.form_frame = None
+        self.search_var = tk.StringVar()
+        self.search_var.trace_add("write", lambda *args: self._refresh_list())
+        self.active_category = None
 
         self._build_list_view()
 
     def _clear(self):
         for widget in self.winfo_children():
             widget.destroy()
+
+    def _get_filtered_entries(self):
+        query = self.search_var.get().strip().lower()
+        entries = database.get_all_entries()
+
+        if self.active_category:
+            entries = [e for e in entries if e["category"] == self.active_category]
+
+        if query:
+            entries = [
+                e for e in entries
+                if query in (e["title"] or "").lower() or query in (e["username"] or "").lower()
+            ]
+
+        return entries
 
     def _build_list_view(self):
         self._clear()
@@ -134,21 +150,66 @@ class VaultScreen(tk.Frame):
         )
         add_button.pack(side="right", ipady=4, ipadx=8)
 
-        entries_container = tk.Frame(self, bg=COLORS["bg_primary"])
-        entries_container.pack(fill="both", expand=True, padx=24, pady=8)
+        search_entry = tk.Entry(
+            self, textvariable=self.search_var, font=self.body_font,
+            bg=COLORS["bg_surface"], fg=COLORS["text_primary"],
+            insertbackground=COLORS["text_primary"],
+            relief="flat", highlightthickness=1,
+            highlightbackground=COLORS["border_subtle"],
+            highlightcolor=COLORS["accent"],
+        )
+        search_entry.pack(fill="x", padx=24, pady=(0, 8), ipady=6)
+        search_entry.insert(0, "")
 
-        entries = database.get_all_entries()
+        categories = database.get_all_categories()
+        if categories:
+            filter_row = tk.Frame(self, bg=COLORS["bg_primary"])
+            filter_row.pack(fill="x", padx=24, pady=(0, 8))
+
+            self._build_category_chip(filter_row, None, "All")
+            for category in categories:
+                self._build_category_chip(filter_row, category, category)
+
+        self.entries_container = tk.Frame(self, bg=COLORS["bg_primary"])
+        self.entries_container.pack(fill="both", expand=True, padx=24, pady=8)
+
+        self._render_entries()
+
+    def _build_category_chip(self, parent, category_value, label_text):
+        is_active = self.active_category == category_value
+        chip = tk.Button(
+            parent, text=label_text, font=self.hint_font,
+            bg=COLORS["accent"] if is_active else COLORS["bg_surface_hover"],
+            fg=COLORS["text_primary"],
+            relief="flat", cursor="hand2",
+            command=lambda: self._set_category_filter(category_value),
+        )
+        chip.pack(side="left", padx=(0, 6), ipady=3, ipadx=8)
+
+    def _set_category_filter(self, category_value):
+        self.active_category = category_value
+        self._build_list_view()
+
+    def _refresh_list(self):
+        if hasattr(self, "entries_container"):
+            self._render_entries()
+
+    def _render_entries(self):
+        for widget in self.entries_container.winfo_children():
+            widget.destroy()
+
+        entries = self._get_filtered_entries()
 
         if not entries:
             empty_label = tk.Label(
-                entries_container, text="No entries yet. Click \"+ Add Entry\" to get started.",
+                self.entries_container, text="No matching entries.",
                 font=self.body_font, bg=COLORS["bg_primary"], fg=COLORS["text_secondary"]
             )
             empty_label.pack(pady=32)
             return
 
         for entry in entries:
-            self._build_entry_row(entries_container, entry)
+            self._build_entry_row(self.entries_container, entry)
 
     def _build_entry_row(self, container, entry):
         row = tk.Frame(container, bg=COLORS["bg_surface"])
@@ -163,8 +224,12 @@ class VaultScreen(tk.Frame):
         )
         title_label.pack(fill="x")
 
+        subtitle_text = entry["username"] or "(no username)"
+        if entry["category"]:
+            subtitle_text += f"  ·  {entry['category']}"
+
         username_label = tk.Label(
-            info, text=entry["username"] or "(no username)", font=self.hint_font,
+            info, text=subtitle_text, font=self.hint_font,
             bg=COLORS["bg_surface"], fg=COLORS["text_secondary"], anchor="w"
         )
         username_label.pack(fill="x")
@@ -241,6 +306,7 @@ class VaultScreen(tk.Frame):
         password_entry = make_field("Password", existing_password, is_password=True)
 
         url_entry = make_field("URL", entry["url"] if is_edit else "")
+        category_entry = make_field("Category (optional)", entry["category"] if is_edit and entry["category"] else "")
 
         status_label = tk.Label(
             form, text="", font=self.hint_font,
@@ -255,16 +321,17 @@ class VaultScreen(tk.Frame):
                 return
 
             encrypted_password = self.session.encrypt(password_entry.get())
+            category_value = category_entry.get().strip() or None
 
             if is_edit:
                 database.update_entry(
                     entry["id"], title_value, username_entry.get(),
-                    encrypted_password, url_entry.get(), entry["category"]
+                    encrypted_password, url_entry.get(), category_value
                 )
             else:
                 database.add_entry(
                     title_value, username_entry.get(),
-                    encrypted_password, url_entry.get()
+                    encrypted_password, url_entry.get(), category_value
                 )
 
             self._build_list_view()

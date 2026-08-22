@@ -71,3 +71,11 @@ def delete_entry(entry_id):
     cursor.execute("DELETE FROM entries WHERE id = ?", (entry_id,))
     connection.commit()
     connection.close()
+    
+def get_all_categories():
+    connection = get_connection()
+    cursor = connection.cursor()
+    cursor.execute("SELECT DISTINCT category FROM entries WHERE category IS NOT NULL AND category != '' ORDER BY category")
+    rows = cursor.fetchall()
+    connection.close()
+    return [row["category"] for row in rows]
