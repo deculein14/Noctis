@@ -51,8 +51,10 @@ Multi-User Login/Vaults (new, inserted after Step 16). After that, resume origin
 None currently.
 
 ## Important Unfinished Work
-- Planned future enhancement (not yet scheduled to a specific step): email alert to user's Gmail after 5 failed master-password attempts. Requires Gmail API/SMTP setup — good candidate for Step 16 (Security Hardening) or a dedicated step.
+- Multi-user login/vaults not yet designed or built (see Current Task above) — this is the immediate next work.
+- Planned future enhancement (not yet scheduled to a specific step): email alert to user's Gmail after 5 failed master-password attempts. Requires Gmail API/SMTP setup.
 - Polish item (do near the end, after core steps are done): add a Show/Hide (eye icon) toggle button next to the password field in the add/edit form, so the real password can be viewed without relying on copy-paste. Not tied to a specific numbered step.
+- Known/accepted limitations (not planned to be fully solved): no OS-level file permission hardening on `noctis.db`/`vault_meta.json`; in-memory encryption key is set to None on lock but not guaranteed to be wiped from RAM immediately (relies on Python garbage collection).
 
 ## Architecture Changes
 None yet beyond the initial plan.
