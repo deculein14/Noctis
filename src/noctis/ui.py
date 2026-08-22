@@ -405,13 +405,13 @@ class VaultScreen(tk.Frame):
         )
         copy_button.pack(side="left", padx=4, ipady=2, ipadx=6)
 
-        edit_button = tk.Button(
-            actions, text="Edit", font=self.hint_font,
+        view_button = tk.Button(
+            actions, text="View", font=self.hint_font,
             bg=COLORS["bg_surface_hover"], fg=COLORS["text_primary"],
             relief="flat", cursor="hand2",
-            command=lambda: self._show_edit_form(entry),
+            command=lambda: self._show_view_screen(entry),
         )
-        edit_button.pack(side="left", padx=4, ipady=2, ipadx=6)
+        view_button.pack(side="left", padx=4, ipady=2, ipadx=6)
 
         delete_button = tk.Button(
             actions, text="Delete", font=self.hint_font,
@@ -442,6 +442,122 @@ class VaultScreen(tk.Frame):
                 pass
 
         self.after(30000, clear_if_unchanged)
+
+    # ---------- View screen ----------
+
+    def _show_view_screen(self, entry):
+        self._clear()
+        container = self._make_scrollable()
+
+        title = tk.Label(
+            container, text=entry["title"], font=self.heading_font,
+            bg=COLORS["bg_primary"], fg=COLORS["text_primary"]
+        )
+        title.pack(pady=(24, 4), padx=48, anchor="w")
+
+        if entry["category"]:
+            category_label = tk.Label(
+                container, text=entry["category"], font=self.hint_font,
+                bg=COLORS["bg_primary"], fg=COLORS["text_secondary"]
+            )
+            category_label.pack(pady=(0, 16), padx=48, anchor="w")
+        else:
+            spacer = tk.Frame(container, bg=COLORS["bg_primary"], height=16)
+            spacer.pack()
+
+        detail_frame = tk.Frame(container, bg=COLORS["bg_primary"])
+        detail_frame.pack(padx=48, fill="x")
+
+        def add_detail_row(label_text, value_text):
+            if not value_text:
+                return
+            row = tk.Frame(detail_frame, bg=COLORS["bg_primary"])
+            row.pack(fill="x", pady=(0, 12))
+            label = tk.Label(
+                row, text=label_text, font=self.hint_font,
+                bg=COLORS["bg_primary"], fg=COLORS["text_secondary"], anchor="w"
+            )
+            label.pack(fill="x")
+            value = tk.Label(
+                row, text=value_text, font=self.body_font,
+                bg=COLORS["bg_primary"], fg=COLORS["text_primary"], anchor="w",
+                wraplength=380, justify="left"
+            )
+            value.pack(fill="x")
+
+        add_detail_row("Email", entry["email"])
+        add_detail_row("Username", entry["username"])
+
+        password_row = tk.Frame(detail_frame, bg=COLORS["bg_primary"])
+        password_row.pack(fill="x", pady=(0, 12))
+        password_label = tk.Label(
+            password_row, text="Password", font=self.hint_font,
+            bg=COLORS["bg_primary"], fg=COLORS["text_secondary"], anchor="w"
+        )
+        password_label.pack(fill="x")
+
+        password_value_row = tk.Frame(password_row, bg=COLORS["bg_primary"])
+        password_value_row.pack(fill="x")
+
+        password_value_label = tk.Label(
+            password_value_row, text="\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022", font=self.body_font,
+            bg=COLORS["bg_primary"], fg=COLORS["text_primary"], anchor="w"
+        )
+        password_value_label.pack(side="left")
+
+        def reveal_password():
+            entered = _prompt_for_master_password(self)
+            if entered is None:
+                return
+            if security.check_master_password(self.username, entered):
+                plaintext = self.session.decrypt(entry["encrypted_password"])
+                password_value_label.config(text=plaintext)
+                reveal_button.config(state="disabled")
+            else:
+                error_label.config(text="Incorrect master password.")
+
+        reveal_button = tk.Button(
+            password_value_row, text="\U0001F441", font=self.body_font,
+            bg=COLORS["bg_primary"], fg=COLORS["text_secondary"],
+            activebackground=COLORS["bg_surface_hover"], activeforeground=COLORS["text_primary"],
+            relief="flat", cursor="hand2", bd=0,
+            command=reveal_password,
+        )
+        reveal_button.pack(side="left", padx=(8, 0))
+
+        error_label = tk.Label(
+            password_row, text="", font=self.hint_font,
+            bg=COLORS["bg_primary"], fg=COLORS["danger"]
+        )
+        error_label.pack(fill="x")
+
+        add_detail_row("Notes", self.session.decrypt(entry["encrypted_notes"]) if entry["encrypted_notes"] else None)
+        add_detail_row("URL", entry["url"])
+
+        custom_fields = database.get_custom_fields(self.username, entry["id"])
+        for field_row in custom_fields:
+            value = self.session.decrypt(field_row["encrypted_value"]) if field_row["encrypted_value"] else ""
+            add_detail_row(field_row["label"], value)
+
+        button_row = tk.Frame(container, bg=COLORS["bg_primary"])
+        button_row.pack(padx=48, fill="x", pady=(8, 24))
+
+        back_button = tk.Button(
+            button_row, text="Back", font=self.body_font,
+            bg=COLORS["bg_surface_hover"], fg=COLORS["text_primary"],
+            relief="flat", cursor="hand2",
+            command=self._build_list_view,
+        )
+        back_button.pack(side="left", fill="x", expand=True, padx=(0, 4), ipady=8)
+
+        edit_button = tk.Button(
+            button_row, text="Edit", font=self.body_font,
+            bg=COLORS["accent"], fg=COLORS["text_primary"],
+            activebackground=COLORS["accent_hover"], activeforeground=COLORS["text_primary"],
+            relief="flat", cursor="hand2",
+            command=lambda: self._show_edit_form(entry),
+        )
+        edit_button.pack(side="left", fill="x", expand=True, padx=(4, 0), ipady=8)
 
     # ---------- "+" choice screen ----------
 
@@ -815,6 +931,67 @@ class VaultScreen(tk.Frame):
             command=on_confirm,
         )
         confirm_button.pack(side="left", fill="x", expand=True, padx=(4, 0), ipady=8)
+
+
+def _prompt_for_master_password(parent):
+    dialog = tk.Toplevel(parent)
+    dialog.title("Confirm Master Password")
+    dialog.configure(bg=COLORS["bg_primary"])
+    dialog.geometry("320x160")
+    dialog.transient(parent)
+    dialog.grab_set()
+
+    result = {"value": None}
+
+    label = tk.Label(
+        dialog, text="Enter your master password to reveal this", font=("Segoe UI", 10),
+        bg=COLORS["bg_primary"], fg=COLORS["text_secondary"], wraplength=280, justify="left"
+    )
+    label.pack(pady=(16, 8), padx=16)
+
+    entry = tk.Entry(
+        dialog, show="\u2022", font=("Segoe UI", 12),
+        bg=COLORS["bg_surface"], fg=COLORS["text_primary"],
+        insertbackground=COLORS["text_primary"],
+        relief="flat", highlightthickness=1,
+        highlightbackground=COLORS["border_subtle"],
+        highlightcolor=COLORS["accent"],
+    )
+    entry.pack(padx=16, fill="x", ipady=6)
+    entry.focus_set()
+
+    def confirm():
+        value = entry.get()
+        if value:
+            result["value"] = value
+        dialog.destroy()
+
+    def cancel():
+        dialog.destroy()
+
+    entry.bind("<Return>", lambda event: confirm())
+
+    button_row = tk.Frame(dialog, bg=COLORS["bg_primary"])
+    button_row.pack(pady=12, padx=16, fill="x")
+
+    cancel_button = tk.Button(
+        button_row, text="Cancel", font=("Segoe UI", 10),
+        bg=COLORS["bg_surface_hover"], fg=COLORS["text_primary"],
+        relief="flat", cursor="hand2",
+        command=cancel,
+    )
+    cancel_button.pack(side="left", fill="x", expand=True, padx=(0, 4), ipady=6)
+
+    confirm_button = tk.Button(
+        button_row, text="Confirm", font=("Segoe UI", 10),
+        bg=COLORS["accent"], fg=COLORS["text_primary"],
+        relief="flat", cursor="hand2",
+        command=confirm,
+    )
+    confirm_button.pack(side="left", fill="x", expand=True, padx=(4, 0), ipady=6)
+
+    parent.wait_window(dialog)
+    return result["value"]
 
 
 def _prompt_for_label(parent):
