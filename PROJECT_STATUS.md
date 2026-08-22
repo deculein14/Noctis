@@ -1,7 +1,7 @@
 # Noctis — Project Status
 
 ## Current Step
-Step 11 complete. Ready to begin Step 12 — Account Creation/Editing/Deletion.
+Step 12 complete. Ready to begin Step 13 — Search and Categories.
 
 ## Completed Steps
 1. Git & GitHub setup — local repo initialized, private GitHub repo created, connected, pushed.
@@ -15,12 +15,13 @@ Step 11 complete. Ready to begin Step 12 — Account Creation/Editing/Deletion.
 9. Encryption / key management — `VaultSession` class: in-memory key handling, encrypt/decrypt entries, lock/unlock. Tested end-to-end with real database writes.
 10. Authentication and failed-attempt protection — `LoginGuard` class: tracks failed attempts, escalating lockout delays (5s/15s/30s/60s), resets on success.
 11. Basic UI — Design system established (`UI_DESIGN.md`: dark theme, colors, typography, spacing). Built `LoginScreen` (first-run vs unlock detection, password masking, lockout integration). Wired into `main.py`. Tested full flow end-to-end.
+12. Account creation/editing/deletion — Added `update_entry()`/`delete_entry()` to `database.py`. Built `VaultScreen` (list view, shared add/edit form, delete). Wired real encrypt/decrypt via `VaultSession`. Fixed missing `database.initialize_database()` call at startup. Tested full CRUD cycle end-to-end.
 
 ## Current Task
-None in progress — awaiting confirmation to start Step 12.
+None in progress — awaiting confirmation to start Step 13.
 
 ## Next Planned Step
-Step 12 — Account Creation/Editing/Deletion (build the vault view UI and wire it to database.py + VaultSession for real CRUD operations on password entries).
+Step 13 — Search and Categories (filter/search the entry list, assign and filter by category).
 
 ## Technology Stack
 - Language: Python 3.14.5
@@ -46,7 +47,8 @@ Step 12 — Account Creation/Editing/Deletion (build the vault view UI and wire 
 None currently.
 
 ## Important Unfinished Work
-- No vault view yet — after login there is only a placeholder success message (no entry list, no add/edit/delete UI). This is Step 12.
+- No search or category filtering in the vault list yet (Step 13).
+- No favorites yet (Step 14).
 - No auto-lock timer yet (Step 15).
 - Planned future enhancement (not yet scheduled to a specific step): email alert to user's Gmail after 5 failed master-password attempts. Requires Gmail API/SMTP setup — good candidate for Step 16 (Security Hardening) or a dedicated step.
 
