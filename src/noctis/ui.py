@@ -1,7 +1,7 @@
 import tkinter as tk
 from tkinter import font as tkfont
 
-from noctis import security
+from noctis import database, security
 
 COLORS = {
     "bg_primary": "#0F1115",
@@ -90,8 +90,6 @@ class LoginScreen(tk.Frame):
             self.guard.record_failure()
             self.status_label.config(text="Incorrect master password.")
             self.password_entry.delete(0, tk.END)
-            
-from noctis import database
 
 
 class VaultScreen(tk.Frame):
@@ -107,6 +105,7 @@ class VaultScreen(tk.Frame):
         self.search_var = tk.StringVar()
         self.search_var.trace_add("write", lambda *args: self._refresh_list())
         self.active_category = None
+        self.show_favorites_only = False
 
         self._build_list_view()
 
@@ -117,6 +116,9 @@ class VaultScreen(tk.Frame):
     def _get_filtered_entries(self):
         query = self.search_var.get().strip().lower()
         entries = database.get_all_entries()
+
+        if self.show_favorites_only:
+            entries = [e for e in entries if e["is_favorite"]]
 
         if self.active_category:
             entries = [e for e in entries if e["category"] == self.active_category]
@@ -159,16 +161,25 @@ class VaultScreen(tk.Frame):
             highlightcolor=COLORS["accent"],
         )
         search_entry.pack(fill="x", padx=24, pady=(0, 8), ipady=6)
-        search_entry.insert(0, "")
 
         categories = database.get_all_categories()
-        if categories:
-            filter_row = tk.Frame(self, bg=COLORS["bg_primary"])
-            filter_row.pack(fill="x", padx=24, pady=(0, 8))
+        filter_row = tk.Frame(self, bg=COLORS["bg_primary"])
+        filter_row.pack(fill="x", padx=24, pady=(0, 8))
 
-            self._build_category_chip(filter_row, None, "All")
-            for category in categories:
-                self._build_category_chip(filter_row, category, category)
+        self._build_category_chip(filter_row, None, "All")
+
+        star_symbol = "★" if self.show_favorites_only else "☆"
+        favorites_chip = tk.Button(
+            filter_row, text=f"{star_symbol} Favorites", font=self.hint_font,
+            bg=COLORS["accent"] if self.show_favorites_only else COLORS["bg_surface_hover"],
+            fg=COLORS["text_primary"],
+            relief="flat", cursor="hand2",
+            command=self._toggle_favorites_filter,
+        )
+        favorites_chip.pack(side="left", padx=(0, 6), ipady=3, ipadx=8)
+
+        for category in categories:
+            self._build_category_chip(filter_row, category, category)
 
         self.entries_container = tk.Frame(self, bg=COLORS["bg_primary"])
         self.entries_container.pack(fill="both", expand=True, padx=24, pady=8)
@@ -188,6 +199,10 @@ class VaultScreen(tk.Frame):
 
     def _set_category_filter(self, category_value):
         self.active_category = category_value
+        self._build_list_view()
+
+    def _toggle_favorites_filter(self):
+        self.show_favorites_only = not self.show_favorites_only
         self._build_list_view()
 
     def _refresh_list(self):
@@ -237,6 +252,16 @@ class VaultScreen(tk.Frame):
         actions = tk.Frame(row, bg=COLORS["bg_surface"])
         actions.pack(side="right")
 
+        star_text = "★" if entry["is_favorite"] else "☆"
+        favorite_button = tk.Button(
+            actions, text=star_text, font=self.hint_font,
+            bg=COLORS["bg_surface_hover"],
+            fg=COLORS["accent"] if entry["is_favorite"] else COLORS["text_secondary"],
+            relief="flat", cursor="hand2",
+            command=lambda: self._toggle_entry_favorite(entry["id"], entry["is_favorite"]),
+        )
+        favorite_button.pack(side="left", padx=4, ipady=2, ipadx=6)
+
         edit_button = tk.Button(
             actions, text="Edit", font=self.hint_font,
             bg=COLORS["bg_surface_hover"], fg=COLORS["text_primary"],
@@ -256,6 +281,10 @@ class VaultScreen(tk.Frame):
     def _delete_entry(self, entry_id):
         database.delete_entry(entry_id)
         self._build_list_view()
+
+    def _toggle_entry_favorite(self, entry_id, current_value):
+        database.toggle_favorite(entry_id, not current_value)
+        self._refresh_list()
 
     def _show_add_form(self):
         self._show_form(entry=None)

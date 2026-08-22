@@ -79,3 +79,14 @@ def get_all_categories():
     rows = cursor.fetchall()
     connection.close()
     return [row["category"] for row in rows]
+
+def toggle_favorite(entry_id, is_favorite):
+    connection = get_connection()
+    cursor = connection.cursor()
+    now = datetime.now(timezone.utc).isoformat()
+    cursor.execute("""
+        UPDATE entries SET is_favorite = ?, updated_at = ?
+        WHERE id = ?
+    """, (1 if is_favorite else 0, now, entry_id))
+    connection.commit()
+    connection.close()
