@@ -88,16 +88,39 @@ class VaultSession:
             raise RuntimeError("Vault is locked. Call unlock() first.")
         fernet = Fernet(self._key)
         return fernet.decrypt(ciphertext).decode("utf-8")   
+LOGIN_GUARD_FILENAME = "login_guard.json"
+
+
 class LoginGuard:
     WAIT_TIMES = {3: 5, 4: 15, 5: 30}
     DEFAULT_WAIT = 60
 
     def __init__(self):
         self.failed_attempts = 0
-        self._locked_until = 0.0
+        self._locked_until_epoch = 0.0
+        self._load()
+
+    def _load(self):
+        path = Path(LOGIN_GUARD_FILENAME)
+        if not path.exists():
+            return
+        try:
+            data = json.loads(path.read_text())
+            self.failed_attempts = data.get("failed_attempts", 0)
+            self._locked_until_epoch = data.get("locked_until_epoch", 0.0)
+        except (json.JSONDecodeError, OSError):
+            self.failed_attempts = 0
+            self._locked_until_epoch = 0.0
+
+    def _save(self):
+        data = {
+            "failed_attempts": self.failed_attempts,
+            "locked_until_epoch": self._locked_until_epoch,
+        }
+        Path(LOGIN_GUARD_FILENAME).write_text(json.dumps(data))
 
     def seconds_until_unlocked(self) -> float:
-        remaining = self._locked_until - time.monotonic()
+        remaining = self._locked_until_epoch - time.time()
         return max(0.0, remaining)
 
     def can_attempt(self) -> bool:
@@ -107,8 +130,10 @@ class LoginGuard:
         self.failed_attempts += 1
         wait = self.WAIT_TIMES.get(self.failed_attempts, self.DEFAULT_WAIT if self.failed_attempts >= 6 else 0)
         if wait > 0:
-            self._locked_until = time.monotonic() + wait
+            self._locked_until_epoch = time.time() + wait
+        self._save()
 
     def record_success(self) -> None:
         self.failed_attempts = 0
-        self._locked_until = 0.0
+        self._locked_until_epoch = 0.0
+        self._save()

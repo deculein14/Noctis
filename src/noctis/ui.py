@@ -261,6 +261,14 @@ class VaultScreen(tk.Frame):
             command=lambda: self._toggle_entry_favorite(entry["id"], entry["is_favorite"]),
         )
         favorite_button.pack(side="left", padx=4, ipady=2, ipadx=6)
+        
+        copy_button = tk.Button(
+            actions, text="Copy", font=self.hint_font,
+            bg=COLORS["bg_surface_hover"], fg=COLORS["text_primary"],
+            relief="flat", cursor="hand2",
+            command=lambda: self._copy_password(entry["encrypted_password"]),
+        )
+        copy_button.pack(side="left", padx=4, ipady=2, ipadx=6)
 
         edit_button = tk.Button(
             actions, text="Edit", font=self.hint_font,

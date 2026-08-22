@@ -11,6 +11,7 @@ master_password*
 *.sqlite
 *.sqlite3
 vault_meta.json
+login_guard.json
 
 # OS junk files
 Thumbs.db
