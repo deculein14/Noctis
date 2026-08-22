@@ -20,10 +20,10 @@ def main():
         login_screen = LoginScreen(window, on_success=on_login_success)
         login_screen.pack(fill="both", expand=True)
 
-    def on_login_success(email, master_password):
+    def on_login_success(username, master_password):
         if not session.is_unlocked:
-            session.unlock(email, master_password)
-        database.initialize_database(session.email)
+            session.unlock(username, master_password)
+        database.initialize_database(session.username)
         show_vault()
 
     def show_vault():

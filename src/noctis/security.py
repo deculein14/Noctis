@@ -14,8 +14,8 @@ VERIFICATION_STRING = b"noctis-vault-check"
 KDF_ITERATIONS = 480_000
 
 
-def _normalize_email(email: str) -> str:
-    return email.strip().lower()
+def _normalize_username(username: str) -> str:
+    return username.strip().lower()
 
 
 def _load_json(filename: str) -> dict:
@@ -47,33 +47,34 @@ def derive_key(master_password: str, salt: bytes) -> bytes:
     return base64.urlsafe_b64encode(raw_key)
 
 
-def user_exists(email: str) -> bool:
+def user_exists(username: str) -> bool:
     users = _load_json(USERS_FILENAME)
-    return _normalize_email(email) in users
+    return _normalize_username(username) in users
 
 
-def register_user(email: str, master_password: str) -> None:
-    email = _normalize_email(email)
+def register_user(username: str, email: str, master_password: str) -> None:
+    username = _normalize_username(username)
     salt = generate_salt()
     key = derive_key(master_password, salt)
     fernet = Fernet(key)
     verification_token = fernet.encrypt(VERIFICATION_STRING)
 
     users = _load_json(USERS_FILENAME)
-    users[email] = {
+    users[username] = {
+        "email": email.strip(),
         "salt": base64.b64encode(salt).decode("utf-8"),
         "verification_token": verification_token.decode("utf-8"),
     }
     _save_json(USERS_FILENAME, users)
 
 
-def check_master_password(email: str, master_password: str) -> bool:
-    email = _normalize_email(email)
+def check_master_password(username: str, master_password: str) -> bool:
+    username = _normalize_username(username)
     users = _load_json(USERS_FILENAME)
-    if email not in users:
+    if username not in users:
         return False
 
-    user_data = users[email]
+    user_data = users[username]
     salt = base64.b64decode(user_data["salt"])
     key = derive_key(master_password, salt)
     fernet = Fernet(key)
@@ -85,39 +86,54 @@ def check_master_password(email: str, master_password: str) -> bool:
         return False
 
 
-def get_user_salt(email: str) -> bytes:
-    email = _normalize_email(email)
+def get_user_salt(username: str) -> bytes:
+    username = _normalize_username(username)
     users = _load_json(USERS_FILENAME)
-    return base64.b64decode(users[email]["salt"])
+    return base64.b64decode(users[username]["salt"])
 
 
-def get_database_filename(email: str) -> str:
-    email = _normalize_email(email)
-    safe_name = email.replace("@", "_at_").replace(".", "_")
+def get_user_email(username: str) -> str:
+    username = _normalize_username(username)
+    users = _load_json(USERS_FILENAME)
+    return users.get(username, {}).get("email", "")
+
+
+def email_in_use(email: str) -> bool:
+    normalized_email = email.strip().lower()
+    users = _load_json(USERS_FILENAME)
+    for user_data in users.values():
+        if user_data.get("email", "").strip().lower() == normalized_email:
+            return True
+    return False
+
+
+def get_database_filename(username: str) -> str:
+    username = _normalize_username(username)
+    safe_name = "".join(c if c.isalnum() else "_" for c in username)
     return f"vault_{safe_name}.db"
 
 
 class VaultSession:
     def __init__(self):
         self._key = None
-        self.email = None
+        self.username = None
 
     @property
     def is_unlocked(self) -> bool:
         return self._key is not None
 
-    def unlock(self, email: str, master_password: str) -> bool:
-        if not check_master_password(email, master_password):
+    def unlock(self, username: str, master_password: str) -> bool:
+        if not check_master_password(username, master_password):
             return False
 
-        salt = get_user_salt(email)
+        salt = get_user_salt(username)
         self._key = derive_key(master_password, salt)
-        self.email = _normalize_email(email)
+        self.username = _normalize_username(username)
         return True
 
     def lock(self) -> None:
         self._key = None
-        self.email = None
+        self.username = None
 
     def encrypt(self, plaintext: str) -> bytes:
         if not self.is_unlocked:
@@ -136,21 +152,21 @@ class LoginGuard:
     WAIT_TIMES = {3: 5, 4: 15, 5: 30}
     DEFAULT_WAIT = 60
 
-    def __init__(self, email: str):
-        self.email = _normalize_email(email)
+    def __init__(self, username: str):
+        self.username = _normalize_username(username)
         self.failed_attempts = 0
         self._locked_until_epoch = 0.0
         self._load()
 
     def _load(self):
         all_guards = _load_json(LOGIN_GUARDS_FILENAME)
-        data = all_guards.get(self.email, {})
+        data = all_guards.get(self.username, {})
         self.failed_attempts = data.get("failed_attempts", 0)
         self._locked_until_epoch = data.get("locked_until_epoch", 0.0)
 
     def _save(self):
         all_guards = _load_json(LOGIN_GUARDS_FILENAME)
-        all_guards[self.email] = {
+        all_guards[self.username] = {
             "failed_attempts": self.failed_attempts,
             "locked_until_epoch": self._locked_until_epoch,
         }
