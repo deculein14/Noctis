@@ -10,8 +10,8 @@ master_password*
 *.db
 *.sqlite
 *.sqlite3
-vault_meta.json
-login_guard.json
+users.json
+login_guards.json
 
 # OS junk files
 Thumbs.db

@@ -2,18 +2,18 @@ import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 
-from noctis import config
+from noctis import security
 
 
-def get_connection():
-    db_path = Path(config.DATABASE_FILENAME)
+def get_connection(email):
+    db_path = Path(security.get_database_filename(email))
     connection = sqlite3.connect(db_path)
     connection.row_factory = sqlite3.Row
     return connection
 
 
-def initialize_database():
-    connection = get_connection()
+def initialize_database(email):
+    connection = get_connection(email)
     cursor = connection.cursor()
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS entries (
@@ -32,8 +32,8 @@ def initialize_database():
     connection.close()
 
 
-def add_entry(title, username=None, encrypted_password=None, url=None, category=None):
-    connection = get_connection()
+def add_entry(email, title, username=None, encrypted_password=None, url=None, category=None):
+    connection = get_connection(email)
     cursor = connection.cursor()
     now = datetime.now(timezone.utc).isoformat()
     cursor.execute("""
@@ -44,16 +44,17 @@ def add_entry(title, username=None, encrypted_password=None, url=None, category=
     connection.close()
 
 
-def get_all_entries():
-    connection = get_connection()
+def get_all_entries(email):
+    connection = get_connection(email)
     cursor = connection.cursor()
     cursor.execute("SELECT * FROM entries ORDER BY title")
     rows = cursor.fetchall()
     connection.close()
     return rows
 
-def update_entry(entry_id, title, username=None, encrypted_password=None, url=None, category=None):
-    connection = get_connection()
+
+def update_entry(email, entry_id, title, username=None, encrypted_password=None, url=None, category=None):
+    connection = get_connection(email)
     cursor = connection.cursor()
     now = datetime.now(timezone.utc).isoformat()
     cursor.execute("""
@@ -65,23 +66,25 @@ def update_entry(entry_id, title, username=None, encrypted_password=None, url=No
     connection.close()
 
 
-def delete_entry(entry_id):
-    connection = get_connection()
+def delete_entry(email, entry_id):
+    connection = get_connection(email)
     cursor = connection.cursor()
     cursor.execute("DELETE FROM entries WHERE id = ?", (entry_id,))
     connection.commit()
     connection.close()
-    
-def get_all_categories():
-    connection = get_connection()
+
+
+def get_all_categories(email):
+    connection = get_connection(email)
     cursor = connection.cursor()
     cursor.execute("SELECT DISTINCT category FROM entries WHERE category IS NOT NULL AND category != '' ORDER BY category")
     rows = cursor.fetchall()
     connection.close()
     return [row["category"] for row in rows]
 
-def toggle_favorite(entry_id, is_favorite):
-    connection = get_connection()
+
+def toggle_favorite(email, entry_id, is_favorite):
+    connection = get_connection(email)
     cursor = connection.cursor()
     now = datetime.now(timezone.utc).isoformat()
     cursor.execute("""

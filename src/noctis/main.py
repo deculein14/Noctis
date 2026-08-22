@@ -5,8 +5,6 @@ from noctis.ui import LoginScreen, VaultScreen, COLORS
 
 
 def main():
-    database.initialize_database()
-
     window = tk.Tk()
     window.title(config.APP_NAME)
     window.geometry(f"{config.WINDOW_WIDTH}x{config.WINDOW_HEIGHT}")
@@ -22,9 +20,10 @@ def main():
         login_screen = LoginScreen(window, on_success=on_login_success)
         login_screen.pack(fill="both", expand=True)
 
-    def on_login_success(master_password):
+    def on_login_success(email, master_password):
         if not session.is_unlocked:
-            session.unlock(master_password)
+            session.unlock(email, master_password)
+        database.initialize_database(session.email)
         show_vault()
 
     def show_vault():

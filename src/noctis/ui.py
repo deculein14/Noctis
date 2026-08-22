@@ -21,8 +21,7 @@ class LoginScreen(tk.Frame):
     def __init__(self, parent, on_success):
         super().__init__(parent, bg=COLORS["bg_primary"])
         self.on_success = on_success
-        self.guard = security.LoginGuard()
-        self.is_first_run = not security.vault_exists()
+        self.guard = None
 
         self.heading_font = tkfont.Font(family="Segoe UI", size=20, weight="bold")
         self.body_font = tkfont.Font(family="Segoe UI", size=12)
@@ -31,33 +30,41 @@ class LoginScreen(tk.Frame):
         self._build_ui()
 
     def _build_ui(self):
-        title_text = "Create Master Password" if self.is_first_run else "Unlock Noctis"
         title = tk.Label(
-            self, text=title_text, font=self.heading_font,
+            self, text="Noctis", font=self.heading_font,
             bg=COLORS["bg_primary"], fg=COLORS["text_primary"]
         )
         title.pack(pady=(48, 24))
 
-        self.password_entry = tk.Entry(
-            self, show="•", font=self.body_font,
-            bg=COLORS["bg_surface"], fg=COLORS["text_primary"],
-            insertbackground=COLORS["text_primary"],
-            relief="flat", highlightthickness=1,
-            highlightbackground=COLORS["border_subtle"],
-            highlightcolor=COLORS["accent"],
-        )
-        self.password_entry.pack(pady=8, padx=48, ipady=8, fill="x")
+        def make_field(placeholder_label, is_password=False):
+            label = tk.Label(
+                self, text=placeholder_label, font=self.hint_font,
+                bg=COLORS["bg_primary"], fg=COLORS["text_secondary"], anchor="w"
+            )
+            label.pack(fill="x", padx=48, pady=(8, 2))
+            entry_widget = tk.Entry(
+                self, show="•" if is_password else "", font=self.body_font,
+                bg=COLORS["bg_surface"], fg=COLORS["text_primary"],
+                insertbackground=COLORS["text_primary"],
+                relief="flat", highlightthickness=1,
+                highlightbackground=COLORS["border_subtle"],
+                highlightcolor=COLORS["accent"],
+            )
+            entry_widget.pack(padx=48, ipady=8, fill="x")
+            return entry_widget
+
+        self.email_entry = make_field("Email")
+        self.password_entry = make_field("Password", is_password=True)
         self.password_entry.bind("<Return>", lambda event: self._submit())
 
         self.status_label = tk.Label(
             self, text="", font=self.hint_font,
             bg=COLORS["bg_primary"], fg=COLORS["danger"]
         )
-        self.status_label.pack(pady=(4, 8))
+        self.status_label.pack(pady=(8, 8))
 
-        button_text = "Create Vault" if self.is_first_run else "Unlock"
         self.submit_button = tk.Button(
-            self, text=button_text, font=self.body_font,
+            self, text="Continue", font=self.body_font,
             bg=COLORS["accent"], fg=COLORS["text_primary"],
             activebackground=COLORS["accent_hover"], activeforeground=COLORS["text_primary"],
             relief="flat", cursor="hand2",
@@ -65,30 +72,39 @@ class LoginScreen(tk.Frame):
         )
         self.submit_button.pack(pady=8, padx=48, ipady=8, fill="x")
 
-        self.password_entry.focus_set()
+        self.email_entry.focus_set()
 
     def _submit(self):
+        email = self.email_entry.get().strip()
         password = self.password_entry.get()
 
-        if self.is_first_run:
+        if not email or "@" not in email:
+            self.status_label.config(text="Please enter a valid email address.")
+            return
+
+        is_new_user = not security.user_exists(email)
+
+        if is_new_user:
             if len(password) < 8:
                 self.status_label.config(text="Master password must be at least 8 characters.")
                 return
-            security.setup_master_password(password)
-            self.on_success(password)
+            security.register_user(email, password)
+            self.on_success(email, password)
             return
+
+        self.guard = security.LoginGuard(email)
 
         if not self.guard.can_attempt():
             wait = self.guard.seconds_until_unlocked()
             self.status_label.config(text=f"Too many attempts. Try again in {wait:.0f}s.")
             return
 
-        if security.check_master_password(password):
+        if security.check_master_password(email, password):
             self.guard.record_success()
-            self.on_success(password)
+            self.on_success(email, password)
         else:
             self.guard.record_failure()
-            self.status_label.config(text="Incorrect master password.")
+            self.status_label.config(text="Incorrect email or password.")
             self.password_entry.delete(0, tk.END)
 
 
@@ -96,6 +112,7 @@ class VaultScreen(tk.Frame):
     def __init__(self, parent, session):
         super().__init__(parent, bg=COLORS["bg_primary"])
         self.session = session
+        self.email = session.email
 
         self.heading_font = tkfont.Font(family="Segoe UI", size=20, weight="bold")
         self.subheading_font = tkfont.Font(family="Segoe UI", size=14)
@@ -115,7 +132,7 @@ class VaultScreen(tk.Frame):
 
     def _get_filtered_entries(self):
         query = self.search_var.get().strip().lower()
-        entries = database.get_all_entries()
+        entries = database.get_all_entries(self.email)
 
         if self.show_favorites_only:
             entries = [e for e in entries if e["is_favorite"]]
@@ -162,7 +179,7 @@ class VaultScreen(tk.Frame):
         )
         search_entry.pack(fill="x", padx=24, pady=(0, 8), ipady=6)
 
-        categories = database.get_all_categories()
+        categories = database.get_all_categories(self.email)
         filter_row = tk.Frame(self, bg=COLORS["bg_primary"])
         filter_row.pack(fill="x", padx=24, pady=(0, 8))
 
@@ -261,7 +278,7 @@ class VaultScreen(tk.Frame):
             command=lambda: self._toggle_entry_favorite(entry["id"], entry["is_favorite"]),
         )
         favorite_button.pack(side="left", padx=4, ipady=2, ipadx=6)
-        
+
         copy_button = tk.Button(
             actions, text="Copy", font=self.hint_font,
             bg=COLORS["bg_surface_hover"], fg=COLORS["text_primary"],
@@ -287,12 +304,26 @@ class VaultScreen(tk.Frame):
         delete_button.pack(side="left", padx=4, ipady=2, ipadx=6)
 
     def _delete_entry(self, entry_id):
-        database.delete_entry(entry_id)
+        database.delete_entry(self.email, entry_id)
         self._build_list_view()
 
     def _toggle_entry_favorite(self, entry_id, current_value):
-        database.toggle_favorite(entry_id, not current_value)
+        database.toggle_favorite(self.email, entry_id, not current_value)
         self._refresh_list()
+
+    def _copy_password(self, encrypted_password):
+        plaintext = self.session.decrypt(encrypted_password)
+        self.clipboard_clear()
+        self.clipboard_append(plaintext)
+
+        def clear_if_unchanged():
+            try:
+                if self.clipboard_get() == plaintext:
+                    self.clipboard_clear()
+            except tk.TclError:
+                pass
+
+        self.after(30000, clear_if_unchanged)
 
     def _show_add_form(self):
         self._show_form(entry=None)
@@ -362,12 +393,12 @@ class VaultScreen(tk.Frame):
 
             if is_edit:
                 database.update_entry(
-                    entry["id"], title_value, username_entry.get(),
+                    self.email, entry["id"], title_value, username_entry.get(),
                     encrypted_password, url_entry.get(), category_value
                 )
             else:
                 database.add_entry(
-                    title_value, username_entry.get(),
+                    self.email, title_value, username_entry.get(),
                     encrypted_password, url_entry.get(), category_value
                 )
 

@@ -8,9 +8,28 @@ from cryptography.fernet import Fernet, InvalidToken
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
-VAULT_META_FILENAME = "vault_meta.json"
+USERS_FILENAME = "users.json"
+LOGIN_GUARDS_FILENAME = "login_guards.json"
 VERIFICATION_STRING = b"noctis-vault-check"
 KDF_ITERATIONS = 480_000
+
+
+def _normalize_email(email: str) -> str:
+    return email.strip().lower()
+
+
+def _load_json(filename: str) -> dict:
+    path = Path(filename)
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text())
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def _save_json(filename: str, data: dict) -> None:
+    Path(filename).write_text(json.dumps(data))
 
 
 def generate_salt():
@@ -28,54 +47,77 @@ def derive_key(master_password: str, salt: bytes) -> bytes:
     return base64.urlsafe_b64encode(raw_key)
 
 
-def vault_exists() -> bool:
-    return Path(VAULT_META_FILENAME).exists()
+def user_exists(email: str) -> bool:
+    users = _load_json(USERS_FILENAME)
+    return _normalize_email(email) in users
 
 
-def setup_master_password(master_password: str) -> None:
+def register_user(email: str, master_password: str) -> None:
+    email = _normalize_email(email)
     salt = generate_salt()
     key = derive_key(master_password, salt)
     fernet = Fernet(key)
     verification_token = fernet.encrypt(VERIFICATION_STRING)
 
-    meta = {
+    users = _load_json(USERS_FILENAME)
+    users[email] = {
         "salt": base64.b64encode(salt).decode("utf-8"),
         "verification_token": verification_token.decode("utf-8"),
     }
-    Path(VAULT_META_FILENAME).write_text(json.dumps(meta))
+    _save_json(USERS_FILENAME, users)
 
 
-def check_master_password(master_password: str) -> bool:
-    meta = json.loads(Path(VAULT_META_FILENAME).read_text())
-    salt = base64.b64decode(meta["salt"])
+def check_master_password(email: str, master_password: str) -> bool:
+    email = _normalize_email(email)
+    users = _load_json(USERS_FILENAME)
+    if email not in users:
+        return False
+
+    user_data = users[email]
+    salt = base64.b64decode(user_data["salt"])
     key = derive_key(master_password, salt)
     fernet = Fernet(key)
 
     try:
-        decrypted = fernet.decrypt(meta["verification_token"].encode("utf-8"))
+        decrypted = fernet.decrypt(user_data["verification_token"].encode("utf-8"))
         return decrypted == VERIFICATION_STRING
     except InvalidToken:
         return False
 
+
+def get_user_salt(email: str) -> bytes:
+    email = _normalize_email(email)
+    users = _load_json(USERS_FILENAME)
+    return base64.b64decode(users[email]["salt"])
+
+
+def get_database_filename(email: str) -> str:
+    email = _normalize_email(email)
+    safe_name = email.replace("@", "_at_").replace(".", "_")
+    return f"vault_{safe_name}.db"
+
+
 class VaultSession:
     def __init__(self):
         self._key = None
+        self.email = None
 
     @property
     def is_unlocked(self) -> bool:
         return self._key is not None
 
-    def unlock(self, master_password: str) -> bool:
-        if not check_master_password(master_password):
+    def unlock(self, email: str, master_password: str) -> bool:
+        if not check_master_password(email, master_password):
             return False
 
-        meta = json.loads(Path(VAULT_META_FILENAME).read_text())
-        salt = base64.b64decode(meta["salt"])
+        salt = get_user_salt(email)
         self._key = derive_key(master_password, salt)
+        self.email = _normalize_email(email)
         return True
 
     def lock(self) -> None:
         self._key = None
+        self.email = None
 
     def encrypt(self, plaintext: str) -> bytes:
         if not self.is_unlocked:
@@ -87,37 +129,32 @@ class VaultSession:
         if not self.is_unlocked:
             raise RuntimeError("Vault is locked. Call unlock() first.")
         fernet = Fernet(self._key)
-        return fernet.decrypt(ciphertext).decode("utf-8")   
-LOGIN_GUARD_FILENAME = "login_guard.json"
+        return fernet.decrypt(ciphertext).decode("utf-8")
 
 
 class LoginGuard:
     WAIT_TIMES = {3: 5, 4: 15, 5: 30}
     DEFAULT_WAIT = 60
 
-    def __init__(self):
+    def __init__(self, email: str):
+        self.email = _normalize_email(email)
         self.failed_attempts = 0
         self._locked_until_epoch = 0.0
         self._load()
 
     def _load(self):
-        path = Path(LOGIN_GUARD_FILENAME)
-        if not path.exists():
-            return
-        try:
-            data = json.loads(path.read_text())
-            self.failed_attempts = data.get("failed_attempts", 0)
-            self._locked_until_epoch = data.get("locked_until_epoch", 0.0)
-        except (json.JSONDecodeError, OSError):
-            self.failed_attempts = 0
-            self._locked_until_epoch = 0.0
+        all_guards = _load_json(LOGIN_GUARDS_FILENAME)
+        data = all_guards.get(self.email, {})
+        self.failed_attempts = data.get("failed_attempts", 0)
+        self._locked_until_epoch = data.get("locked_until_epoch", 0.0)
 
     def _save(self):
-        data = {
+        all_guards = _load_json(LOGIN_GUARDS_FILENAME)
+        all_guards[self.email] = {
             "failed_attempts": self.failed_attempts,
             "locked_until_epoch": self._locked_until_epoch,
         }
-        Path(LOGIN_GUARD_FILENAME).write_text(json.dumps(data))
+        _save_json(LOGIN_GUARDS_FILENAME, all_guards)
 
     def seconds_until_unlocked(self) -> float:
         remaining = self._locked_until_epoch - time.time()
