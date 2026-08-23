@@ -6,10 +6,10 @@ MAJOR PIVOT IN PROGRESS: migrating the UI from tkinter to pywebview (HTML/CSS/JS
 ### Why this pivot happened
 User wanted real CSS animations/hover transitions, which tkinter cannot do (no animation/transition system). Confirmed via a working pywebview proof-of-concept (a test window with a smooth CSS button hover transition) that the approach works on this machine before committing to the migration. This aligns Noctis's stack with how real commercial password managers (1Password, Bitwarden) build their desktop UIs (HTML/CSS/JS wrapped in a native window), just using a lighter Python-friendly tool (pywebview) instead of Electron/Node.js.
 
-### Planned migration order (not yet started)
-1. Set up project structure: a `web/` folder for HTML/CSS/JS files, wire pywebview into a new `main.py`.
-2. Rebuild Login/Register screen first (smallest, self-contained), connected to `security.py`, tested before moving on.
-3. Rebuild Vault list (grouping by account name, search, categories, favorites).
+### Planned migration order
+1. ✅ DONE — Set up project structure: `src/noctis/web/` folder created; `main.py` rebuilt with a pywebview `Api` class bridging JS calls to `security.py` (`register_user`, `login_user`, `open_vault` stub).
+2. ✅ DONE — Login/Register screen rebuilt (`login.html`, `style.css`, `login.js`): mode toggle (login/register), email field shown only in register mode, password show/hide toggle, real CSS focus/hover transitions, calls into `security.py` via `window.pywebview.api.*`. Tested: registration and login both work correctly, calling into the existing security logic unchanged.
+3. NEXT — Rebuild Vault list (grouping by account name, search, categories, favorites). Currently `Api.open_vault()` is a stub that just prints a confirmation — no vault UI exists yet.
 4. Rebuild Account form (add/edit, custom fields).
 5. Rebuild View screen (masked password, re-auth reveal/copy, per-field copy icons).
 6. Rebuild remaining popups (delete confirmation, category picker, custom field name prompt).
