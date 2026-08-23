@@ -358,8 +358,124 @@ class VaultScreen(tk.Frame):
             empty_label.pack(pady=32)
             return
 
+        groups = {}
+        group_order = []
         for entry in entries:
-            self._build_entry_row(self.entries_container, entry)
+            key = (entry["title"] or "").strip().lower()
+            if key not in groups:
+                groups[key] = []
+                group_order.append(key)
+            groups[key].append(entry)
+
+        for key in group_order:
+            group_entries = groups[key]
+            if len(group_entries) == 1:
+                self._build_entry_row(self.entries_container, group_entries[0])
+            else:
+                self._build_group_row(self.entries_container, group_entries)
+
+    def _build_group_row(self, container, group_entries):
+        row = tk.Frame(container, bg=COLORS["bg_surface"])
+        row.pack(fill="x", pady=4, ipady=8, ipadx=12)
+
+        info = tk.Frame(row, bg=COLORS["bg_surface"])
+        info.pack(side="left", fill="x", expand=True)
+
+        display_title = group_entries[0]["title"]
+        title_label = tk.Label(
+            info, text=display_title, font=self.subheading_font,
+            bg=COLORS["bg_surface"], fg=COLORS["text_primary"], anchor="w"
+        )
+        title_label.pack(fill="x")
+
+        count_label = tk.Label(
+            info, text=f"{len(group_entries)} accounts", font=self.hint_font,
+            bg=COLORS["bg_surface"], fg=COLORS["text_secondary"], anchor="w"
+        )
+        count_label.pack(fill="x")
+
+        actions = tk.Frame(row, bg=COLORS["bg_surface"])
+        actions.pack(side="right")
+
+        view_button = tk.Button(
+            actions, text="View", font=self.hint_font,
+            bg=COLORS["bg_surface_hover"], fg=COLORS["text_primary"],
+            relief="flat", cursor="hand2",
+            command=lambda: self._show_group_list(group_entries),
+        )
+        view_button.pack(side="left", padx=4, ipady=2, ipadx=6)
+
+    def _toggle_favorite_in_group_list(self, entry, group_entries):
+        database.toggle_favorite(self.username, entry["id"], not entry["is_favorite"])
+        title = entry["title"]
+        refreshed = [e for e in database.get_all_entries(self.username) if e["title"] == title]
+        if refreshed:
+            self._show_group_list(refreshed)
+        else:
+            self._build_list_view()
+
+    def _show_group_list(self, group_entries):
+        self._clear()
+        container = self._make_scrollable()
+
+        title = tk.Label(
+            container, text=group_entries[0]["title"], font=self.heading_font,
+            bg=COLORS["bg_primary"], fg=COLORS["text_primary"]
+        )
+        title.pack(pady=(24, 4), padx=24, anchor="w")
+
+        hint = tk.Label(
+            container, text="Choose which account to view", font=self.hint_font,
+            bg=COLORS["bg_primary"], fg=COLORS["text_secondary"]
+        )
+        hint.pack(pady=(0, 16), padx=24, anchor="w")
+
+        list_frame = tk.Frame(container, bg=COLORS["bg_primary"])
+        list_frame.pack(fill="both", expand=True, padx=24)
+
+        for index, entry in enumerate(group_entries, start=1):
+            label_text = None
+            if entry["encrypted_notes"]:
+                label_text = self.session.decrypt(entry["encrypted_notes"])
+            if not label_text:
+                label_text = entry["username"] or entry["email"]
+            if not label_text:
+                label_text = f"Account {index}"
+
+            row = tk.Frame(list_frame, bg=COLORS["bg_surface"])
+            row.pack(fill="x", pady=4, ipady=8, ipadx=12)
+
+            row_label = tk.Label(
+                row, text=label_text, font=self.body_font,
+                bg=COLORS["bg_surface"], fg=COLORS["text_primary"], anchor="w"
+            )
+            row_label.pack(side="left", fill="x", expand=True)
+
+            star_text = "\u2605" if entry["is_favorite"] else "\u2606"
+            favorite_button = tk.Button(
+                row, text=star_text, font=self.hint_font,
+                bg=COLORS["bg_surface_hover"],
+                fg=COLORS["accent"] if entry["is_favorite"] else COLORS["text_secondary"],
+                relief="flat", cursor="hand2",
+                command=lambda e=entry: self._toggle_favorite_in_group_list(e, group_entries),
+            )
+            favorite_button.pack(side="right", padx=4, ipady=2, ipadx=6)
+
+            view_button = tk.Button(
+                row, text="View", font=self.hint_font,
+                bg=COLORS["bg_surface_hover"], fg=COLORS["text_primary"],
+                relief="flat", cursor="hand2",
+                command=lambda e=entry: self._show_view_screen(e),
+            )
+            view_button.pack(side="right", padx=4, ipady=2, ipadx=6)
+
+        back_button = tk.Button(
+            container, text="Back", font=self.body_font,
+            bg=COLORS["bg_surface_hover"], fg=COLORS["text_primary"],
+            relief="flat", cursor="hand2",
+            command=self._build_list_view,
+        )
+        back_button.pack(padx=24, fill="x", pady=(16, 24), ipady=8)
 
     def _build_entry_row(self, container, entry):
         row = tk.Frame(container, bg=COLORS["bg_surface"])
@@ -374,9 +490,7 @@ class VaultScreen(tk.Frame):
         )
         title_label.pack(fill="x")
 
-        subtitle_text = entry["username"] or entry["email"] or "(no username)"
-        if entry["category"]:
-            subtitle_text += f"  \u00b7  {entry['category']}"
+        subtitle_text = "1 account"
 
         username_label = tk.Label(
             info, text=subtitle_text, font=self.hint_font,
@@ -397,14 +511,6 @@ class VaultScreen(tk.Frame):
         )
         favorite_button.pack(side="left", padx=4, ipady=2, ipadx=6)
 
-        copy_button = tk.Button(
-            actions, text="Copy", font=self.hint_font,
-            bg=COLORS["bg_surface_hover"], fg=COLORS["text_primary"],
-            relief="flat", cursor="hand2",
-            command=lambda: self._copy_password(entry["encrypted_password"]),
-        )
-        copy_button.pack(side="left", padx=4, ipady=2, ipadx=6)
-
         view_button = tk.Button(
             actions, text="View", font=self.hint_font,
             bg=COLORS["bg_surface_hover"], fg=COLORS["text_primary"],
@@ -417,11 +523,18 @@ class VaultScreen(tk.Frame):
             actions, text="Delete", font=self.hint_font,
             bg=COLORS["bg_surface_hover"], fg=COLORS["danger"],
             relief="flat", cursor="hand2",
-            command=lambda: self._delete_entry(entry["id"]),
+            command=lambda: self._delete_entry(entry["id"], entry["title"]),
         )
         delete_button.pack(side="left", padx=4, ipady=2, ipadx=6)
 
-    def _delete_entry(self, entry_id):
+    def _delete_entry(self, entry_id, entry_title=""):
+        confirmed = _prompt_for_confirmation(
+            self,
+            title="Delete Account?",
+            message=f"Are you sure you want to delete \"{entry_title}\"? This cannot be undone.",
+        )
+        if not confirmed:
+            return
         database.delete_entry(self.username, entry_id)
         self._build_list_view()
 
@@ -429,8 +542,7 @@ class VaultScreen(tk.Frame):
         database.toggle_favorite(self.username, entry_id, not current_value)
         self._refresh_list()
 
-    def _copy_password(self, encrypted_password):
-        plaintext = self.session.decrypt(encrypted_password)
+    def _copy_text(self, plaintext):
         self.clipboard_clear()
         self.clipboard_append(plaintext)
 
@@ -478,12 +590,25 @@ class VaultScreen(tk.Frame):
                 bg=COLORS["bg_primary"], fg=COLORS["text_secondary"], anchor="w"
             )
             label.pack(fill="x")
+
+            value_row = tk.Frame(row, bg=COLORS["bg_primary"])
+            value_row.pack(fill="x")
+
             value = tk.Label(
-                row, text=value_text, font=self.body_font,
+                value_row, text=value_text, font=self.body_font,
                 bg=COLORS["bg_primary"], fg=COLORS["text_primary"], anchor="w",
-                wraplength=380, justify="left"
+                wraplength=340, justify="left"
             )
-            value.pack(fill="x")
+            value.pack(side="left", fill="x")
+
+            copy_button = tk.Button(
+                value_row, text="\U0001F4CB", font=self.hint_font,
+                bg=COLORS["bg_primary"], fg=COLORS["text_secondary"],
+                activebackground=COLORS["bg_surface_hover"], activeforeground=COLORS["text_primary"],
+                relief="flat", cursor="hand2", bd=0,
+                command=lambda: self._copy_text(value_text),
+            )
+            copy_button.pack(side="left", padx=(8, 0))
 
         add_detail_row("Email", entry["email"])
         add_detail_row("Username", entry["username"])
@@ -505,14 +630,37 @@ class VaultScreen(tk.Frame):
         )
         password_value_label.pack(side="left")
 
+        revealed_password = {"value": None}
+
         def reveal_password():
+            if revealed_password["value"] is not None:
+                return
             entered = _prompt_for_master_password(self)
             if entered is None:
                 return
             if security.check_master_password(self.username, entered):
                 plaintext = self.session.decrypt(entry["encrypted_password"])
+                revealed_password["value"] = plaintext
                 password_value_label.config(text=plaintext)
                 reveal_button.config(state="disabled")
+                error_label.config(text="")
+            else:
+                error_label.config(text="Incorrect master password.")
+
+        def copy_password():
+            if revealed_password["value"] is not None:
+                self._copy_text(revealed_password["value"])
+                return
+            entered = _prompt_for_master_password(self)
+            if entered is None:
+                return
+            if security.check_master_password(self.username, entered):
+                plaintext = self.session.decrypt(entry["encrypted_password"])
+                revealed_password["value"] = plaintext
+                password_value_label.config(text=plaintext)
+                reveal_button.config(state="disabled")
+                error_label.config(text="")
+                self._copy_text(plaintext)
             else:
                 error_label.config(text="Incorrect master password.")
 
@@ -524,6 +672,15 @@ class VaultScreen(tk.Frame):
             command=reveal_password,
         )
         reveal_button.pack(side="left", padx=(8, 0))
+
+        password_copy_button = tk.Button(
+            password_value_row, text="\U0001F4CB", font=self.hint_font,
+            bg=COLORS["bg_primary"], fg=COLORS["text_secondary"],
+            activebackground=COLORS["bg_surface_hover"], activeforeground=COLORS["text_primary"],
+            relief="flat", cursor="hand2", bd=0,
+            command=copy_password,
+        )
+        password_copy_button.pack(side="left", padx=(6, 0))
 
         error_label = tk.Label(
             password_row, text="", font=self.hint_font,
@@ -538,6 +695,42 @@ class VaultScreen(tk.Frame):
         for field_row in custom_fields:
             value = self.session.decrypt(field_row["encrypted_value"]) if field_row["encrypted_value"] else ""
             add_detail_row(field_row["label"], value)
+
+        secondary_row = tk.Frame(container, bg=COLORS["bg_primary"])
+        secondary_row.pack(padx=48, fill="x", pady=(8, 0))
+
+        star_text = "\u2605 Unfavorite" if entry["is_favorite"] else "\u2606 Favorite"
+        favorite_button = tk.Button(
+            secondary_row, text=star_text, font=self.hint_font,
+            bg=COLORS["bg_surface_hover"],
+            fg=COLORS["accent"] if entry["is_favorite"] else COLORS["text_secondary"],
+            relief="flat", cursor="hand2",
+            command=lambda: self._toggle_favorite_in_view(entry),
+        )
+        favorite_button.pack(side="left", fill="x", expand=True, padx=(0, 4), ipady=6)
+
+        delete_button = tk.Button(
+            secondary_row, text="Delete", font=self.hint_font,
+            bg=COLORS["bg_surface_hover"], fg=COLORS["danger"],
+            relief="flat", cursor="hand2",
+            command=lambda: self._delete_entry_from_view(entry),
+        )
+        delete_button.pack(side="left", fill="x", expand=True, padx=(4, 0), ipady=6)
+
+        edit_status_label = tk.Label(
+            container, text="", font=self.hint_font,
+            bg=COLORS["bg_primary"], fg=COLORS["danger"]
+        )
+        edit_status_label.pack(padx=48, fill="x")
+
+        def request_edit():
+            entered = _prompt_for_master_password(self)
+            if entered is None:
+                return
+            if security.check_master_password(self.username, entered):
+                self._show_edit_form(entry)
+            else:
+                edit_status_label.config(text="Incorrect master password. Edit cancelled.")
 
         button_row = tk.Frame(container, bg=COLORS["bg_primary"])
         button_row.pack(padx=48, fill="x", pady=(8, 24))
@@ -555,9 +748,24 @@ class VaultScreen(tk.Frame):
             bg=COLORS["accent"], fg=COLORS["text_primary"],
             activebackground=COLORS["accent_hover"], activeforeground=COLORS["text_primary"],
             relief="flat", cursor="hand2",
-            command=lambda: self._show_edit_form(entry),
+            command=request_edit,
         )
         edit_button.pack(side="left", fill="x", expand=True, padx=(4, 0), ipady=8)
+
+    def _toggle_favorite_in_view(self, entry):
+        database.toggle_favorite(self.username, entry["id"], not entry["is_favorite"])
+        self._build_list_view()
+
+    def _delete_entry_from_view(self, entry):
+        confirmed = _prompt_for_confirmation(
+            self,
+            title="Delete Account?",
+            message=f"Are you sure you want to delete \"{entry['title']}\"? This cannot be undone.",
+        )
+        if not confirmed:
+            return
+        database.delete_entry(self.username, entry["id"])
+        self._build_list_view()
 
     # ---------- "+" choice screen ----------
 
@@ -931,6 +1139,53 @@ class VaultScreen(tk.Frame):
             command=on_confirm,
         )
         confirm_button.pack(side="left", fill="x", expand=True, padx=(4, 0), ipady=8)
+
+
+def _prompt_for_confirmation(parent, title, message):
+    dialog = tk.Toplevel(parent)
+    dialog.title(title)
+    dialog.configure(bg=COLORS["bg_primary"])
+    dialog.geometry("320x160")
+    dialog.transient(parent)
+    dialog.grab_set()
+
+    result = {"value": False}
+
+    label = tk.Label(
+        dialog, text=message, font=("Segoe UI", 10),
+        bg=COLORS["bg_primary"], fg=COLORS["text_primary"], wraplength=280, justify="left"
+    )
+    label.pack(pady=(20, 16), padx=16)
+
+    def confirm():
+        result["value"] = True
+        dialog.destroy()
+
+    def cancel():
+        result["value"] = False
+        dialog.destroy()
+
+    button_row = tk.Frame(dialog, bg=COLORS["bg_primary"])
+    button_row.pack(pady=12, padx=16, fill="x", side="bottom")
+
+    cancel_button = tk.Button(
+        button_row, text="Cancel", font=("Segoe UI", 10),
+        bg=COLORS["bg_surface_hover"], fg=COLORS["text_primary"],
+        relief="flat", cursor="hand2",
+        command=cancel,
+    )
+    cancel_button.pack(side="left", fill="x", expand=True, padx=(0, 4), ipady=6)
+
+    delete_button = tk.Button(
+        button_row, text="Delete", font=("Segoe UI", 10),
+        bg=COLORS["danger"], fg=COLORS["text_primary"],
+        relief="flat", cursor="hand2",
+        command=confirm,
+    )
+    delete_button.pack(side="left", fill="x", expand=True, padx=(4, 0), ipady=6)
+
+    parent.wait_window(dialog)
+    return result["value"]
 
 
 def _prompt_for_master_password(parent):

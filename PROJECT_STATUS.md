@@ -38,6 +38,13 @@ Core app redesign complete (identity model + account creation UX). Ready to resu
     - All vault screens (list, add-choice, category form, account form, category picker) wrapped in a scrollable canvas with mouse-wheel support and clamped scroll boundaries (fixed an early bug where scrolling up past the top caused visual glitching), so content is reachable without needing to maximize the window.
     - Fixed a bug where newly added custom fields were packed into the wrong parent frame and appeared below the Cancel/Continue buttons instead of above them.
 20. View screen with re-authentication — Clicking an entry now shows a "View" screen (not a direct edit) listing Account Name, Category, Email, Username, Notes, URL, and any custom fields in plain readable text. The Password field stays masked with a 👁 icon; clicking it opens a popup requiring the master password to be re-entered before the real password is revealed inline (wrong password shows an error and keeps it hidden). Notes and custom fields do NOT require re-authentication (explicit scope decision — only the password itself is gated). An "Edit" button inside the View screen opens the existing edit form.
+21. View screen refinements and grouped accounts —
+    - Removed the "Copy" button from the entry row entirely. Added a 📋 copy icon next to every field inside the View screen (Email, Username, Notes, URL, custom fields) so a specific field's value can be copied directly. The Password field's copy icon requires the same master-password re-authentication as reveal; once entered correctly once per view, both reveal and copy work without asking again.
+    - Delete now requires a second confirmation ("Are you sure you want to delete '[name]'? This cannot be undone.") via a popup before actually removing an entry — applies both on the list row and inside the View screen.
+    - Edit (from the View screen) now also requires re-entering the master password before the edit form opens — wrong password cancels the edit attempt with an error message.
+    - Grouped accounts: entries sharing the same account name (case-insensitive, e.g. two "Facebook" entries) now collapse into a single list row showing the name and an account count (e.g. "2 accounts"), with only a View button (no star/delete directly on the grouped row). Clicking it opens a sub-list where each account is labeled by its Notes (falling back to username/email, then "Account 1/2/3..."), each with its own Favorite toggle and a View button leading to the full View screen for that specific account. Star (Favorite) and Delete (with confirmation) were moved into the View screen itself for both grouped and single accounts, for consistency.
+    - Single-account list rows now show "1 account" as the subtitle (replacing the old username/category subtitle), matching the grouped-row style; actions (star/view/delete) on single rows are unchanged.
+    - Confirmed filter-chip order (All → Favorites → categories alphabetically) already matched the requested ordering — no change needed there.
 
 ## Current Task
 None in progress — awaiting confirmation to resume Step 17 (Testing).
@@ -68,6 +75,9 @@ Step 17 — Testing (automated tests, likely via `pytest`, covering `security.py
 - Considered and declined a Supabase/cloud backend to preserve the local-only, offline design.
 - Account entries now support arbitrary custom fields (encrypted), not just the fixed original field set.
 - Viewing an entry's real password requires re-entering the master password at that moment (re-authentication), even though the vault is already unlocked — an extra safeguard against casually exposing passwords on screen. This check applies only to the password field itself, not notes or custom fields.
+- Editing an entry (from the View screen) also requires master-password re-authentication before the edit form opens.
+- Deleting an entry requires an explicit confirmation popup ("This cannot be undone") — no longer deletes on a single click.
+- Multiple accounts can share the same account name (e.g. two "Facebook" logins) and are grouped together in the list, distinguished by their Notes field (e.g. "Main acc" / "Alt acc").
 - GitHub repository is private.
 
 ## Known Issues
