@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Noctis</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <div class="login-container">
+    <h1 class="app-title">Noctis</h1>
+    <p class="mode-subtitle" id="mode-subtitle">Log in to your vault</p>
+
+    <div class="field" id="email-field" style="display: none;">
+      <label>Email</label>
+      <input type="text" id="email-input" autocomplete="off">
+    </div>
+
+    <div class="field">
+      <label>Username</label>
+      <input type="text" id="username-input" autocomplete="off">
+    </div>
+
+    <div class="field">
+      <label>Password</label>
+      <div class="password-row">
+        <input type="password" id="password-input" autocomplete="off">
+        <button type="button" class="icon-button" id="toggle-password">👁</button>
+      </div>
+    </div>
+
+    <p class="status-message" id="status-message"></p>
+
+    <button class="primary-button" id="submit-button">Log In</button>
+
+    <button class="link-button" id="mode-switch">No account yet? Register</button>
+  </div>
+
+  <script src="login.js"></script>
+</body>
+</html>
