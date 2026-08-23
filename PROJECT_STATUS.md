@@ -1,7 +1,19 @@
 # Noctis — Project Status
 
 ## Current Step
-Core app redesign complete (identity model + account creation UX). Ready to resume the original roadmap: Step 17 — Testing.
+MAJOR PIVOT IN PROGRESS: migrating the UI from tkinter to pywebview (HTML/CSS/JS desktop window). The tkinter UI (`ui.py`, `main.py`) has been deleted (recoverable from Git history at or before commit `d5bec15` if ever needed). `security.py`, `database.py`, and `config.py` are untouched and fully reusable as-is — they have no tkinter dependency. **The app currently does not run at all** — there is no UI layer until the pywebview version is built. This was an explicit, confirmed decision (accepted the app being non-functional during the rebuild) rather than an accident.
+
+### Why this pivot happened
+User wanted real CSS animations/hover transitions, which tkinter cannot do (no animation/transition system). Confirmed via a working pywebview proof-of-concept (a test window with a smooth CSS button hover transition) that the approach works on this machine before committing to the migration. This aligns Noctis's stack with how real commercial password managers (1Password, Bitwarden) build their desktop UIs (HTML/CSS/JS wrapped in a native window), just using a lighter Python-friendly tool (pywebview) instead of Electron/Node.js.
+
+### Planned migration order (not yet started)
+1. Set up project structure: a `web/` folder for HTML/CSS/JS files, wire pywebview into a new `main.py`.
+2. Rebuild Login/Register screen first (smallest, self-contained), connected to `security.py`, tested before moving on.
+3. Rebuild Vault list (grouping by account name, search, categories, favorites).
+4. Rebuild Account form (add/edit, custom fields).
+5. Rebuild View screen (masked password, re-auth reveal/copy, per-field copy icons).
+6. Rebuild remaining popups (delete confirmation, category picker, custom field name prompt).
+7. Final wiring and cleanup.
 
 ## Completed Steps
 1. Git & GitHub setup — local repo initialized, private GitHub repo created, connected, pushed.
@@ -54,7 +66,7 @@ Step 17 — Testing (automated tests, likely via `pytest`, covering `security.py
 
 ## Technology Stack
 - Language: Python 3.14.5
-- GUI: tkinter (built-in)
+- GUI: **transitioning from tkinter to pywebview** (HTML/CSS/JS rendered in a native desktop window via the system's web engine — Edge WebView2 on Windows). `pywebview` is installed. Old tkinter UI removed.
 - Local storage: SQLite (built-in `sqlite3`), one database file per user account
 - Encryption: `cryptography` library (PBKDF2HMAC + Fernet/AES)
 - Packaging (planned, Step 19 of original numbering): PyInstaller
@@ -64,6 +76,7 @@ Step 17 — Testing (automated tests, likely via `pytest`, covering `security.py
 - cryptography==50.0.0
 - cffi==2.1.1
 - pycparser==3.0
+- pywebview (installed via pip; not yet confirmed added to requirements.txt — verify/add during next session)
 
 ## Important Decisions Made
 - Passwords and notes are always encrypted before touching the database; only metadata (title/account name, entry-username, category, timestamps, email) is stored in plain columns.
