@@ -7,6 +7,7 @@ from noctis import database, security
 class Api:
     def __init__(self):
         self.current_username = None
+        self.session = security.VaultSession()
 
     def register_user(self, username, email, password):
         if security.user_exists(username):
@@ -15,6 +16,9 @@ class Api:
             return {"success": False, "message": "This email is already associated with another account."}
 
         security.register_user(username, email, password)
+        self.session.unlock(username, password)
+        self.current_username = username
+        database.initialize_database(username)
         return {"success": True}
 
     def login_user(self, username, password):
@@ -28,14 +32,48 @@ class Api:
 
         if security.check_master_password(username, password):
             guard.record_success()
+            self.session.unlock(username, password)
+            self.current_username = username
+            database.initialize_database(username)
             return {"success": True}
         else:
             guard.record_failure()
             return {"success": False, "message": "Incorrect username or password."}
 
-    def open_vault(self, username):
-        self.current_username = username
-        print(f"Login successful for: {username}. Vault screen not built yet.")
+    def logout(self):
+        self.session.lock()
+        self.current_username = None
+        return {"success": True}
+
+    def _row_to_dict(self, row):
+        return {
+            "id": row["id"],
+            "title": row["title"],
+            "username": row["username"],
+            "email": row["email"],
+            "url": row["url"],
+            "category": row["category"],
+            "is_favorite": bool(row["is_favorite"]),
+        }
+
+    def get_entries(self):
+        rows = database.get_all_entries(self.current_username)
+        return [self._row_to_dict(row) for row in rows]
+
+    def get_categories(self):
+        return database.get_all_categories(self.current_username)
+
+    def add_category(self, name):
+        database.add_category(self.current_username, name)
+        return {"success": True}
+
+    def toggle_favorite(self, entry_id, is_favorite):
+        database.toggle_favorite(self.current_username, entry_id, is_favorite)
+        return {"success": True}
+
+    def delete_entry(self, entry_id):
+        database.delete_entry(self.current_username, entry_id)
+        return {"success": True}
 
 
 def get_web_path(filename):

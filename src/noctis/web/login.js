@@ -55,14 +55,14 @@ submitButton.addEventListener("click", async () => {
     }
     const result = await window.pywebview.api.register_user(username, email, password);
     if (result.success) {
-      window.pywebview.api.open_vault(username);
+      window.location.href = "vault.html";
     } else {
       statusMessage.textContent = result.message;
     }
   } else {
     const result = await window.pywebview.api.login_user(username, password);
     if (result.success) {
-      window.pywebview.api.open_vault(username);
+      window.location.href = "vault.html";
     } else {
       statusMessage.textContent = result.message;
     }
