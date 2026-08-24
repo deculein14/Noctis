@@ -9,6 +9,8 @@ class Api:
         self.current_username = None
         self.session = security.VaultSession()
 
+    # ---------- Auth ----------
+
     def register_user(self, username, email, password):
         if security.user_exists(username):
             return {"success": False, "message": "An account already exists for this username. Please log in instead."}
@@ -42,6 +44,8 @@ class Api:
         self.current_username = None
         return {"success": True}
 
+    # ---------- Vault data ----------
+
     def _row_to_dict(self, row):
         return {
             "id": row["id"],
@@ -62,6 +66,14 @@ class Api:
 
     def add_category(self, name):
         database.add_category(self.current_username, name)
+        return {"success": True}
+
+    def rename_category(self, old_name, new_name):
+        database.rename_category(self.current_username, old_name, new_name)
+        return {"success": True}
+
+    def delete_category(self, name):
+        database.delete_category(self.current_username, name)
         return {"success": True}
 
     def toggle_favorite(self, entry_id, is_favorite):
@@ -96,6 +108,77 @@ class Api:
                 database.add_custom_field(self.current_username, entry_id, label, encrypted_value)
 
         return {"success": True, "entry_id": entry_id}
+
+    def update_account(self, entry_id, data):
+        encrypted_password = self.session.encrypt(data.get("password", ""))
+        notes = data.get("notes") or None
+        encrypted_notes = self.session.encrypt(notes) if notes else None
+
+        database.update_entry(
+            self.current_username,
+            entry_id,
+            data.get("title"),
+            data.get("username") or None,
+            data.get("email") or None,
+            encrypted_password,
+            encrypted_notes,
+            data.get("url") or None,
+            data.get("category") or None,
+        )
+
+        database.delete_custom_fields_for_entry(self.current_username, entry_id)
+        for field in data.get("custom_fields", []):
+            label = field.get("label")
+            value = field.get("value")
+            if label and value:
+                encrypted_value = self.session.encrypt(value)
+                database.add_custom_field(self.current_username, entry_id, label, encrypted_value)
+
+        return {"success": True}
+
+    def get_entry_details(self, entry_id):
+        rows = database.get_all_entries(self.current_username)
+        entry = next((row for row in rows if row["id"] == entry_id), None)
+        if entry is None:
+            return {"success": False, "message": "Entry not found."}
+
+        notes = self.session.decrypt(entry["encrypted_notes"]) if entry["encrypted_notes"] else None
+
+        custom_field_rows = database.get_custom_fields(self.current_username, entry_id)
+        custom_fields = [
+            {"label": row["label"], "value": self.session.decrypt(row["encrypted_value"])}
+            for row in custom_field_rows
+        ]
+
+        return {
+            "success": True,
+            "id": entry["id"],
+            "title": entry["title"],
+            "email": entry["email"],
+            "username": entry["username"],
+            "notes": notes,
+            "url": entry["url"],
+            "category": entry["category"],
+            "is_favorite": bool(entry["is_favorite"]),
+            "custom_fields": custom_fields,
+        }
+
+    def verify_master_password(self, password):
+        if security.check_master_password(self.current_username, password):
+            return {"success": True}
+        return {"success": False, "message": "Incorrect master password."}
+
+    def reveal_password(self, entry_id, master_password):
+        if not security.check_master_password(self.current_username, master_password):
+            return {"success": False, "message": "Incorrect master password."}
+
+        rows = database.get_all_entries(self.current_username)
+        entry = next((row for row in rows if row["id"] == entry_id), None)
+        if entry is None:
+            return {"success": False, "message": "Entry not found."}
+
+        plaintext = self.session.decrypt(entry["encrypted_password"])
+        return {"success": True, "password": plaintext}
 
 
 def get_web_path(filename):

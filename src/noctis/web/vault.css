@@ -359,3 +359,146 @@
   margin: 4px 0 10px 0;
   min-height: 14px;
 }
+
+
+.detail-header {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.detail-header h1 {
+  font-size: 22px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.detail-category {
+  color: #9096A2;
+  font-size: 13px;
+  margin: 0 0 20px 0;
+}
+
+.detail-field {
+  margin-bottom: 16px;
+}
+
+.detail-field-label {
+  font-size: 12px;
+  color: #9096A2;
+  margin-bottom: 4px;
+}
+
+.detail-field-value-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.detail-field-value {
+  font-size: 14px;
+  color: #E4E6EB;
+  word-break: break-word;
+}
+
+.field-icon-button {
+  background: none;
+  border: none;
+  color: #9096A2;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 4px;
+  transition: color 0.15s ease;
+}
+
+.field-icon-button:hover {
+  color: #E4E6EB;
+}
+
+.detail-error {
+  color: #EF4444;
+  font-size: 12px;
+  margin-top: 4px;
+  min-height: 14px;
+}
+
+.detail-secondary-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.detail-secondary-row button {
+  flex: 1;
+  padding: 8px;
+  border-radius: 6px;
+  border: none;
+  font-size: 12px;
+  cursor: pointer;
+  background: #22262F;
+  color: #E4E6EB;
+  transition: background 0.15s ease;
+}
+
+.detail-secondary-row button:hover {
+  background: #2A2E38;
+}
+
+.detail-secondary-row button.danger-text {
+  color: #EF4444;
+}
+
+.detail-button-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.detail-button-row button {
+  flex: 1;
+  padding: 10px;
+  border-radius: 6px;
+  border: none;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.group-list-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.group-list-header h1 {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.group-list-hint {
+  color: #9096A2;
+  font-size: 12px;
+  margin: 0 0 16px 0;
+}
+
+.group-account-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #1A1D24;
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-bottom: 8px;
+  transition: background 0.15s ease;
+}
+
+.group-account-row:hover {
+  background: #22262F;
+}
+
+.group-account-label {
+  font-size: 14px;
+}

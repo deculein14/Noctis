@@ -115,6 +115,27 @@ def add_category(username, name):
     connection.close()
 
 
+def rename_category(username, old_name, new_name):
+    connection = get_connection(username)
+    cursor = connection.cursor()
+    try:
+        cursor.execute("UPDATE categories SET name = ? WHERE name = ?", (new_name, old_name))
+        cursor.execute("UPDATE entries SET category = ? WHERE category = ?", (new_name, old_name))
+        connection.commit()
+    except sqlite3.IntegrityError:
+        pass
+    connection.close()
+
+
+def delete_category(username, name):
+    connection = get_connection(username)
+    cursor = connection.cursor()
+    cursor.execute("DELETE FROM categories WHERE name = ?", (name,))
+    cursor.execute("UPDATE entries SET category = NULL WHERE category = ?", (name,))
+    connection.commit()
+    connection.close()
+
+
 def toggle_favorite(username, entry_id, is_favorite):
     connection = get_connection(username)
     cursor = connection.cursor()

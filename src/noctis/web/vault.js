@@ -3,6 +3,7 @@ let activeCategory = null;
 let showFavoritesOnly = false;
 let pendingAccount = null;
 let pendingCustomFields = [];
+let editingEntryId = null;
 
 const searchInput = document.getElementById("search-input");
 const chipRow = document.getElementById("chip-row");
@@ -16,6 +17,7 @@ function closeModal() {
   modalBox.innerHTML = "";
   pendingAccount = null;
   pendingCustomFields = [];
+  editingEntryId = null;
 }
 
 function openModal(contentHtml) {
@@ -26,6 +28,8 @@ function openModal(contentHtml) {
 modalOverlay.addEventListener("click", (event) => {
   if (event.target === modalOverlay) closeModal();
 });
+
+// ---------- Data loading ----------
 
 async function loadEntries() {
   allEntries = await window.pywebview.api.get_entries();
@@ -55,12 +59,78 @@ async function renderChips() {
   chipRow.appendChild(favChip);
 
   categories.forEach((category) => {
-    chipRow.appendChild(makeChip(category, activeCategory === category, () => {
+    const chip = makeChip(category, activeCategory === category, () => {
       activeCategory = category;
       renderEntries();
       renderChips();
-    }));
+    });
+    chip.addEventListener("contextmenu", (event) => {
+      event.preventDefault();
+      showCategoryContextMenu(event.pageX, event.pageY, category);
+    });
+    chipRow.appendChild(chip);
   });
+}
+
+function showCategoryContextMenu(x, y, category) {
+  const existing = document.getElementById("category-context-menu");
+  if (existing) existing.remove();
+
+  const menu = document.createElement("div");
+  menu.id = "category-context-menu";
+  menu.style.cssText = `
+    position: fixed;
+    top: ${y}px;
+    left: ${x}px;
+    background: #1A1D24;
+    border: 1px solid #2A2E38;
+    border-radius: 6px;
+    padding: 4px;
+    z-index: 200;
+    min-width: 120px;
+  `;
+
+  const renameOption = document.createElement("div");
+  renameOption.textContent = "Rename";
+  renameOption.style.cssText = "padding: 8px 12px; cursor: pointer; font-size: 13px; border-radius: 4px;";
+  renameOption.addEventListener("mouseenter", () => renameOption.style.background = "#22262F");
+  renameOption.addEventListener("mouseleave", () => renameOption.style.background = "transparent");
+  renameOption.addEventListener("click", async () => {
+    menu.remove();
+    const newName = prompt(`Rename category "${category}" to:`, category);
+    if (newName && newName.trim() && newName.trim() !== category) {
+      await window.pywebview.api.rename_category(category, newName.trim());
+      if (activeCategory === category) activeCategory = newName.trim();
+      loadEntries();
+    }
+  });
+
+  const deleteOption = document.createElement("div");
+  deleteOption.textContent = "Delete";
+  deleteOption.style.cssText = "padding: 8px 12px; cursor: pointer; font-size: 13px; color: #EF4444; border-radius: 4px;";
+  deleteOption.addEventListener("mouseenter", () => deleteOption.style.background = "#22262F");
+  deleteOption.addEventListener("mouseleave", () => deleteOption.style.background = "transparent");
+  deleteOption.addEventListener("click", async () => {
+    menu.remove();
+    const confirmed = confirm(`Delete category "${category}"? Accounts in it will become uncategorized.`);
+    if (confirmed) {
+      await window.pywebview.api.delete_category(category);
+      if (activeCategory === category) activeCategory = null;
+      loadEntries();
+    }
+  });
+
+  menu.appendChild(renameOption);
+  menu.appendChild(deleteOption);
+  document.body.appendChild(menu);
+
+  const closeMenu = (event) => {
+    if (!menu.contains(event.target)) {
+      menu.remove();
+      document.removeEventListener("click", closeMenu);
+    }
+  };
+  setTimeout(() => document.addEventListener("click", closeMenu), 0);
 }
 
 function makeChip(label, isActive, onClick) {
@@ -131,34 +201,13 @@ function buildEntryRow(entry) {
   const actions = document.createElement("div");
   actions.className = "entry-actions";
 
-  const starButton = document.createElement("button");
-  starButton.className = "action-button star" + (entry.is_favorite ? " active" : "");
-  starButton.textContent = entry.is_favorite ? "\u2605" : "\u2606";
-  starButton.addEventListener("click", async () => {
-    await window.pywebview.api.toggle_favorite(entry.id, !entry.is_favorite);
-    loadEntries();
-  });
-  actions.appendChild(starButton);
-
   const viewButton = document.createElement("button");
   viewButton.className = "action-button";
   viewButton.textContent = "View";
   viewButton.addEventListener("click", () => {
-    alert("View screen not built yet for: " + entry.title);
+    showDetailView(entry.id);
   });
   actions.appendChild(viewButton);
-
-  const deleteButton = document.createElement("button");
-  deleteButton.className = "action-button danger";
-  deleteButton.textContent = "Delete";
-  deleteButton.addEventListener("click", async () => {
-    const confirmed = confirm(`Are you sure you want to delete "${entry.title}"? This cannot be undone.`);
-    if (confirmed) {
-      await window.pywebview.api.delete_entry(entry.id);
-      loadEntries();
-    }
-  });
-  actions.appendChild(deleteButton);
 
   row.appendChild(actions);
   return row;
@@ -180,7 +229,7 @@ function buildGroupRow(groupEntries) {
   viewButton.className = "action-button";
   viewButton.textContent = "View";
   viewButton.addEventListener("click", () => {
-    alert("Group view not built yet for: " + groupEntries[0].title);
+    showGroupList(groupEntries);
   });
   actions.appendChild(viewButton);
 
@@ -196,6 +245,8 @@ function escapeHtml(text) {
 
 searchInput.addEventListener("input", renderEntries);
 
+// ---------- "+" choice modal ----------
+
 addButton.addEventListener("click", () => {
   openModal(`
     <p class="modal-title">What would you like to add?</p>
@@ -207,6 +258,8 @@ addButton.addEventListener("click", () => {
   document.getElementById("choice-account").addEventListener("click", startNewAccountForm);
   document.getElementById("choice-cancel").addEventListener("click", closeModal);
 });
+
+// ---------- Category creation ----------
 
 function showAddCategoryForm() {
   openModal(`
@@ -235,9 +288,12 @@ function showAddCategoryForm() {
   });
 }
 
+// ---------- Account form ----------
+
 function startNewAccountForm() {
   pendingAccount = { title: "", email: "", username: "", password: "", notes: "", url: "" };
   pendingCustomFields = [];
+  editingEntryId = null;
   renderAccountForm();
 }
 
@@ -355,6 +411,8 @@ function onAccountContinue() {
   showCategoryPicker();
 }
 
+// ---------- Category picker ----------
+
 async function showCategoryPicker() {
   const categories = await window.pywebview.api.get_categories();
 
@@ -362,7 +420,7 @@ async function showCategoryPicker() {
     ? `<p style="color:#9096A2; font-size:13px;">No categories yet. You can add one later.</p>`
     : categories.map((category) => `
         <label class="category-option">
-          <input type="radio" name="category-pick" value="${escapeHtml(category)}">
+          <input type="radio" name="category-pick" value="${escapeHtml(category)}" ${pendingAccount.category === category ? "checked" : ""}>
           ${escapeHtml(category)}
         </label>
       `).join("");
@@ -396,10 +454,291 @@ async function showCategoryPicker() {
       custom_fields: pendingCustomFields.slice(),
     };
 
-    await window.pywebview.api.save_account(dataToSave);
+    if (editingEntryId !== null) {
+      await window.pywebview.api.update_account(editingEntryId, dataToSave);
+    } else {
+      await window.pywebview.api.save_account(dataToSave);
+    }
+
+    editingEntryId = null;
     closeModal();
-    loadEntries();
+    showMainView();
   });
+}
+
+// ---------- Master password confirmation modal ----------
+
+function promptForMasterPassword(messageText) {
+  return new Promise((resolve) => {
+    openModal(`
+      <p class="modal-title">Confirm Master Password</p>
+      <p style="text-align:center; color:#9096A2; font-size:12px; margin-top:-12px;">${escapeHtml(messageText)}</p>
+      <div class="modal-field">
+        <input type="password" id="master-password-input">
+      </div>
+      <p class="modal-error" id="master-password-error"></p>
+      <div class="modal-button-row">
+        <button class="modal-secondary" id="master-password-cancel">Cancel</button>
+        <button class="modal-primary" id="master-password-confirm">Confirm</button>
+      </div>
+    `);
+
+    const input = document.getElementById("master-password-input");
+    input.focus();
+
+    const cleanup = (value) => {
+      closeModal();
+      resolve(value);
+    };
+
+    document.getElementById("master-password-cancel").addEventListener("click", () => cleanup(null));
+    document.getElementById("master-password-confirm").addEventListener("click", () => cleanup(input.value));
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") cleanup(input.value);
+    });
+  });
+}
+
+// ---------- Clipboard copy with auto-clear ----------
+
+let lastCopiedText = null;
+
+function copyText(text) {
+  navigator.clipboard.writeText(text);
+  lastCopiedText = text;
+  setTimeout(async () => {
+    try {
+      const current = await navigator.clipboard.readText();
+      if (current === lastCopiedText) {
+        navigator.clipboard.writeText("");
+      }
+    } catch (e) {
+      // Clipboard read may be blocked; safe to ignore.
+    }
+  }, 30000);
+}
+
+// ---------- Detail (View) screen ----------
+
+const mainView = document.getElementById("main-view");
+const groupListView = document.getElementById("group-list-view");
+const detailView = document.getElementById("detail-view");
+
+function showMainView() {
+  mainView.style.display = "block";
+  groupListView.style.display = "none";
+  detailView.style.display = "none";
+  loadEntries();
+}
+
+async function showDetailView(entryId) {
+  const details = await window.pywebview.api.get_entry_details(entryId);
+  if (!details.success) {
+    alert(details.message);
+    return;
+  }
+
+  mainView.style.display = "none";
+  groupListView.style.display = "none";
+  detailView.style.display = "block";
+
+  let revealedPassword = null;
+
+  const fieldsHtml = [
+    ["Email", details.email],
+    ["Username", details.username],
+  ].filter(([, value]) => value).map(([label, value]) => `
+    <div class="detail-field">
+      <div class="detail-field-label">${escapeHtml(label)}</div>
+      <div class="detail-field-value-row">
+        <span class="detail-field-value">${escapeHtml(value)}</span>
+        <button type="button" class="field-icon-button copy-field" data-value="${escapeHtml(value)}">\u{1F4CB}</button>
+      </div>
+    </div>
+  `).join("");
+
+  const trailingFieldsHtml = [
+    ["Notes", details.notes],
+    ["URL", details.url],
+  ].filter(([, value]) => value).map(([label, value]) => `
+    <div class="detail-field">
+      <div class="detail-field-label">${escapeHtml(label)}</div>
+      <div class="detail-field-value-row">
+        <span class="detail-field-value">${escapeHtml(value)}</span>
+        <button type="button" class="field-icon-button copy-field" data-value="${escapeHtml(value)}">\u{1F4CB}</button>
+      </div>
+    </div>
+  `).join("");
+
+  const customFieldsHtml = details.custom_fields.map(({ label, value }) => `
+    <div class="detail-field">
+      <div class="detail-field-label">${escapeHtml(label)}</div>
+      <div class="detail-field-value-row">
+        <span class="detail-field-value">${escapeHtml(value)}</span>
+        <button type="button" class="field-icon-button copy-field" data-value="${escapeHtml(value)}">\u{1F4CB}</button>
+      </div>
+    </div>
+  `).join("");
+
+  detailView.innerHTML = `
+    <div class="detail-header">
+      <h1>${escapeHtml(details.title)}</h1>
+    </div>
+    <p class="detail-category">${details.category ? escapeHtml(details.category) : ""}</p>
+
+    ${fieldsHtml}
+
+    <div class="detail-field">
+      <div class="detail-field-label">Password</div>
+      <div class="detail-field-value-row">
+        <span class="detail-field-value" id="password-display">\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022</span>
+        <button type="button" class="field-icon-button" id="reveal-password-btn">\u{1F441}</button>
+        <button type="button" class="field-icon-button" id="copy-password-btn">\u{1F4CB}</button>
+      </div>
+      <p class="detail-error" id="password-error"></p>
+    </div>
+
+    ${trailingFieldsHtml}
+    ${customFieldsHtml}
+
+    <div class="detail-secondary-row">
+      <button type="button" id="favorite-toggle-btn">${details.is_favorite ? "\u2605 Unfavorite" : "\u2606 Favorite"}</button>
+      <button type="button" class="danger-text" id="delete-entry-btn">Delete</button>
+    </div>
+
+    <p class="detail-error" id="edit-error"></p>
+    <div class="detail-button-row">
+      <button class="modal-secondary" id="detail-back-btn">Back</button>
+      <button class="modal-primary" id="detail-edit-btn">Edit</button>
+    </div>
+  `;
+
+  document.querySelectorAll(".copy-field").forEach((button) => {
+    button.addEventListener("click", () => {
+      copyText(button.dataset.value);
+    });
+  });
+
+  document.getElementById("reveal-password-btn").addEventListener("click", async () => {
+    const errorLabel = document.getElementById("password-error");
+    if (revealedPassword !== null) return;
+    const entered = await promptForMasterPassword("Enter your master password to reveal this");
+    if (entered === null) return;
+    const result = await window.pywebview.api.reveal_password(entryId, entered);
+    if (result.success) {
+      revealedPassword = result.password;
+      document.getElementById("password-display").textContent = revealedPassword;
+      errorLabel.textContent = "";
+    } else {
+      errorLabel.textContent = result.message;
+    }
+  });
+
+  document.getElementById("copy-password-btn").addEventListener("click", async () => {
+    const errorLabel = document.getElementById("password-error");
+    if (revealedPassword !== null) {
+      copyText(revealedPassword);
+      return;
+    }
+    const entered = await promptForMasterPassword("Enter your master password to copy this");
+    if (entered === null) return;
+    const result = await window.pywebview.api.reveal_password(entryId, entered);
+    if (result.success) {
+      revealedPassword = result.password;
+      document.getElementById("password-display").textContent = revealedPassword;
+      errorLabel.textContent = "";
+      copyText(revealedPassword);
+    } else {
+      errorLabel.textContent = result.message;
+    }
+  });
+
+  document.getElementById("favorite-toggle-btn").addEventListener("click", async () => {
+    await window.pywebview.api.toggle_favorite(entryId, !details.is_favorite);
+    showDetailView(entryId);
+  });
+
+  document.getElementById("delete-entry-btn").addEventListener("click", async () => {
+    const confirmed = confirm(`Are you sure you want to delete "${details.title}"? This cannot be undone.`);
+    if (confirmed) {
+      await window.pywebview.api.delete_entry(entryId);
+      showMainView();
+    }
+  });
+
+  document.getElementById("detail-back-btn").addEventListener("click", showMainView);
+
+  document.getElementById("detail-edit-btn").addEventListener("click", async () => {
+    const editError = document.getElementById("edit-error");
+    const entered = await promptForMasterPassword("Enter your master password to edit this");
+    if (entered === null) return;
+    const pwResult = await window.pywebview.api.reveal_password(entryId, entered);
+    if (pwResult.success) {
+      showEditForm(details, pwResult.password);
+    } else {
+      editError.textContent = "Incorrect master password. Edit cancelled.";
+    }
+  });
+}
+
+function showEditForm(details, realPassword) {
+  pendingAccount = {
+    title: details.title || "",
+    email: details.email || "",
+    username: details.username || "",
+    password: realPassword || "",
+    notes: details.notes || "",
+    url: details.url || "",
+    category: details.category || null,
+  };
+  pendingCustomFields = details.custom_fields.map((f) => ({ label: f.label, value: f.value }));
+  editingEntryId = details.id;
+
+  mainView.style.display = "block";
+  detailView.style.display = "none";
+  renderAccountForm();
+}
+
+// ---------- Group list screen ----------
+
+function showGroupList(groupEntries) {
+  mainView.style.display = "none";
+  detailView.style.display = "none";
+  groupListView.style.display = "block";
+
+  renderGroupList(groupEntries);
+}
+
+async function renderGroupList(groupEntries) {
+  const rowsHtml = groupEntries.map((entry, index) => {
+    const label = entry.username || entry.email || `Account ${index + 1}`;
+    return `
+      <div class="group-account-row" data-id="${entry.id}">
+        <span class="group-account-label">${escapeHtml(label)}</span>
+        <div class="entry-actions">
+          <button class="action-button group-view" data-id="${entry.id}">View</button>
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  groupListView.innerHTML = `
+    <div class="group-list-header">
+      <h1>${escapeHtml(groupEntries[0].title)}</h1>
+    </div>
+    <p class="group-list-hint">Choose which account to view</p>
+    <div id="group-rows">${rowsHtml}</div>
+    <button class="modal-secondary" id="group-back-btn" style="width:100%; padding:10px; border-radius:6px; border:none; margin-top:12px; cursor:pointer;">Back</button>
+  `;
+
+  document.querySelectorAll(".group-view").forEach((button) => {
+    button.addEventListener("click", () => {
+      const entryId = parseInt(button.dataset.id, 10);
+      showDetailView(entryId);
+    });
+  });
+
+  document.getElementById("group-back-btn").addEventListener("click", showMainView);
 }
 
 if (window.pywebview) {
