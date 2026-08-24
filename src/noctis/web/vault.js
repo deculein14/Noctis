@@ -1,11 +1,31 @@
 let allEntries = [];
 let activeCategory = null;
 let showFavoritesOnly = false;
+let pendingAccount = null;
+let pendingCustomFields = [];
 
 const searchInput = document.getElementById("search-input");
 const chipRow = document.getElementById("chip-row");
 const entriesContainer = document.getElementById("entries-container");
 const addButton = document.getElementById("add-button");
+const modalOverlay = document.getElementById("modal-overlay");
+const modalBox = document.getElementById("modal-box");
+
+function closeModal() {
+  modalOverlay.classList.remove("visible");
+  modalBox.innerHTML = "";
+  pendingAccount = null;
+  pendingCustomFields = [];
+}
+
+function openModal(contentHtml) {
+  modalBox.innerHTML = contentHtml;
+  modalOverlay.classList.add("visible");
+}
+
+modalOverlay.addEventListener("click", (event) => {
+  if (event.target === modalOverlay) closeModal();
+});
 
 async function loadEntries() {
   allEntries = await window.pywebview.api.get_entries();
@@ -24,7 +44,7 @@ async function renderChips() {
   }));
 
   const favChip = makeChip(
-    (showFavoritesOnly ? "★" : "☆") + " Favorites",
+    (showFavoritesOnly ? "\u2605" : "\u2606") + " Favorites",
     showFavoritesOnly,
     () => {
       showFavoritesOnly = !showFavoritesOnly;
@@ -55,12 +75,8 @@ function getFilteredEntries() {
   const query = searchInput.value.trim().toLowerCase();
   let entries = allEntries;
 
-  if (showFavoritesOnly) {
-    entries = entries.filter((e) => e.is_favorite);
-  }
-  if (activeCategory) {
-    entries = entries.filter((e) => e.category === activeCategory);
-  }
+  if (showFavoritesOnly) entries = entries.filter((e) => e.is_favorite);
+  if (activeCategory) entries = entries.filter((e) => e.category === activeCategory);
   if (query) {
     entries = entries.filter((e) =>
       (e.title || "").toLowerCase().includes(query) ||
@@ -117,7 +133,7 @@ function buildEntryRow(entry) {
 
   const starButton = document.createElement("button");
   starButton.className = "action-button star" + (entry.is_favorite ? " active" : "");
-  starButton.textContent = entry.is_favorite ? "★" : "☆";
+  starButton.textContent = entry.is_favorite ? "\u2605" : "\u2606";
   starButton.addEventListener("click", async () => {
     await window.pywebview.api.toggle_favorite(entry.id, !entry.is_favorite);
     loadEntries();
@@ -181,7 +197,204 @@ function escapeHtml(text) {
 searchInput.addEventListener("input", renderEntries);
 
 addButton.addEventListener("click", () => {
-  alert("Add Account / Category screen not built yet.");
+  openModal(`
+    <p class="modal-title">What would you like to add?</p>
+    <button class="choice-button category-choice" id="choice-category">Category</button>
+    <button class="choice-button account-choice" id="choice-account">Account</button>
+    <button class="modal-cancel" id="choice-cancel">Cancel</button>
+  `);
+  document.getElementById("choice-category").addEventListener("click", showAddCategoryForm);
+  document.getElementById("choice-account").addEventListener("click", showAccountForm);
+  document.getElementById("choice-cancel").addEventListener("click", closeModal);
 });
+
+function showAddCategoryForm() {
+  openModal(`
+    <p class="modal-title">New Category</p>
+    <div class="modal-field">
+      <label>Category Name</label>
+      <input type="text" id="category-name-input">
+    </div>
+    <p class="modal-error" id="category-error"></p>
+    <div class="modal-button-row">
+      <button class="modal-secondary" id="category-cancel">Cancel</button>
+      <button class="modal-primary" id="category-save">Save</button>
+    </div>
+  `);
+  document.getElementById("category-cancel").addEventListener("click", closeModal);
+  document.getElementById("category-save").addEventListener("click", async () => {
+    const name = document.getElementById("category-name-input").value.trim();
+    const errorLabel = document.getElementById("category-error");
+    if (!name) {
+      errorLabel.textContent = "Category name is required.";
+      return;
+    }
+    await window.pywebview.api.add_category(name);
+    closeModal();
+    loadEntries();
+  });
+}
+
+function showAccountForm() {
+  pendingCustomFields = [];
+  renderAccountForm();
+}
+
+function renderAccountForm() {
+  const customFieldsHtml = pendingCustomFields.map((field, index) => `
+    <div class="custom-field-row">
+      <div class="modal-field">
+        <label>${escapeHtml(field.label)}</label>
+        <input type="text" class="custom-field-value" data-index="${index}" value="${escapeHtml(field.value)}">
+      </div>
+      <button type="button" class="remove-field-button" data-remove="${index}">&times;</button>
+    </div>
+  `).join("");
+
+  openModal(`
+    <p class="modal-title">Add an Account</p>
+    <div class="modal-field">
+      <label>What account? (e.g. Instagram, Facebook)</label>
+      <input type="text" id="acc-title">
+    </div>
+    <div class="modal-field">
+      <label>Email (optional)</label>
+      <input type="text" id="acc-email">
+    </div>
+    <div class="modal-field">
+      <label>Username (optional)</label>
+      <input type="text" id="acc-username">
+    </div>
+    <div class="modal-field">
+      <label>Password</label>
+      <div class="modal-field-row">
+        <input type="password" id="acc-password">
+        <button type="button" class="icon-button" id="acc-toggle-password">\u{1F441}</button>
+      </div>
+    </div>
+    <div class="modal-field">
+      <label>Notes (optional)</label>
+      <input type="text" id="acc-notes">
+    </div>
+    <div class="modal-field">
+      <label>URL (optional)</label>
+      <input type="text" id="acc-url">
+    </div>
+    <div id="custom-fields-container">${customFieldsHtml}</div>
+    <button type="button" class="add-field-link" id="add-field-button">+ Add Field</button>
+    <p class="modal-error" id="acc-error"></p>
+    <div class="modal-button-row">
+      <button class="modal-secondary" id="acc-cancel">Cancel</button>
+      <button class="modal-primary" id="acc-continue">Continue</button>
+    </div>
+  `);
+
+  if (pendingAccount) {
+    document.getElementById("acc-title").value = pendingAccount.title || "";
+    document.getElementById("acc-email").value = pendingAccount.email || "";
+    document.getElementById("acc-username").value = pendingAccount.username || "";
+    document.getElementById("acc-password").value = pendingAccount.password || "";
+    document.getElementById("acc-notes").value = pendingAccount.notes || "";
+    document.getElementById("acc-url").value = pendingAccount.url || "";
+  }
+
+  document.getElementById("acc-toggle-password").addEventListener("click", () => {
+    const passwordField = document.getElementById("acc-password");
+    passwordField.type = passwordField.type === "password" ? "text" : "password";
+  });
+
+  document.getElementById("add-field-button").addEventListener("click", () => {
+    const label = prompt("Field Name (e.g. Phone Number)");
+    if (label) {
+      saveCurrentFieldValues();
+      pendingCustomFields.push({ label: label, value: "" });
+      renderAccountForm();
+    }
+  });
+
+  document.querySelectorAll(".remove-field-button").forEach((button) => {
+    button.addEventListener("click", () => {
+      saveCurrentFieldValues();
+      const index = parseInt(button.dataset.remove, 10);
+      pendingCustomFields.splice(index, 1);
+      renderAccountForm();
+    });
+  });
+
+  document.getElementById("acc-cancel").addEventListener("click", closeModal);
+  document.getElementById("acc-continue").addEventListener("click", onAccountContinue);
+}
+
+function saveCurrentFieldValues() {
+  document.querySelectorAll(".custom-field-value").forEach((input) => {
+    const index = parseInt(input.dataset.index, 10);
+    pendingCustomFields[index].value = input.value;
+  });
+}
+
+function onAccountContinue() {
+  const title = document.getElementById("acc-title").value.trim();
+  const password = document.getElementById("acc-password").value;
+  const errorLabel = document.getElementById("acc-error");
+
+  if (!title) {
+    errorLabel.textContent = "Please enter what account this is (e.g. Instagram).";
+    return;
+  }
+  if (!password) {
+    errorLabel.textContent = "Password is required.";
+    return;
+  }
+
+  saveCurrentFieldValues();
+
+  pendingAccount = {
+    title: title,
+    email: document.getElementById("acc-email").value.trim(),
+    username: document.getElementById("acc-username").value.trim(),
+    password: password,
+    notes: document.getElementById("acc-notes").value.trim(),
+    url: document.getElementById("acc-url").value.trim(),
+    custom_fields: pendingCustomFields.slice(),
+  };
+
+  showCategoryPicker();
+}
+
+async function showCategoryPicker() {
+  const categories = await window.pywebview.api.get_categories();
+
+  const optionsHtml = categories.length === 0
+    ? `<p style="color:#9096A2; font-size:13px;">No categories yet. You can add one later.</p>`
+    : categories.map((category) => `
+        <label class="category-option">
+          <input type="radio" name="category-pick" value="${escapeHtml(category)}">
+          ${escapeHtml(category)}
+        </label>
+      `).join("");
+
+  openModal(`
+    <p class="modal-title">Choose a Category</p>
+    <p style="text-align:center; color:#9096A2; font-size:12px; margin-top:-12px;">Where should this account be placed?</p>
+    <div id="category-options">${optionsHtml}</div>
+    <div class="modal-button-row">
+      <button class="modal-secondary" id="picker-back">Back</button>
+      <button class="modal-primary" id="picker-save">Save</button>
+    </div>
+  `);
+
+  document.getElementById("picker-back").addEventListener("click", () => {
+    showAccountForm();
+  });
+
+  document.getElementById("picker-save").addEventListener("click", async () => {
+    const selected = document.querySelector('input[name="category-pick"]:checked');
+    pendingAccount.category = selected ? selected.value : null;
+
+    await window.pywebview.api.save_account(pendingAccount);
+    closeModal();
+    loadEntries();
+  });
+}
 
 loadEntries();

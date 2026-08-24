@@ -16,9 +16,6 @@ class Api:
             return {"success": False, "message": "This email is already associated with another account."}
 
         security.register_user(username, email, password)
-        self.session.unlock(username, password)
-        self.current_username = username
-        database.initialize_database(username)
         return {"success": True}
 
     def login_user(self, username, password):
@@ -74,6 +71,31 @@ class Api:
     def delete_entry(self, entry_id):
         database.delete_entry(self.current_username, entry_id)
         return {"success": True}
+
+    def save_account(self, data):
+        encrypted_password = self.session.encrypt(data.get("password", ""))
+        notes = data.get("notes") or None
+        encrypted_notes = self.session.encrypt(notes) if notes else None
+
+        entry_id = database.add_entry(
+            self.current_username,
+            data.get("title"),
+            data.get("username") or None,
+            data.get("email") or None,
+            encrypted_password,
+            encrypted_notes,
+            data.get("url") or None,
+            data.get("category") or None,
+        )
+
+        for field in data.get("custom_fields", []):
+            label = field.get("label")
+            value = field.get("value")
+            if label and value:
+                encrypted_value = self.session.encrypt(value)
+                database.add_custom_field(self.current_username, entry_id, label, encrypted_value)
+
+        return {"success": True, "entry_id": entry_id}
 
 
 def get_web_path(filename):
