@@ -204,7 +204,7 @@ addButton.addEventListener("click", () => {
     <button class="modal-cancel" id="choice-cancel">Cancel</button>
   `);
   document.getElementById("choice-category").addEventListener("click", showAddCategoryForm);
-  document.getElementById("choice-account").addEventListener("click", showAccountForm);
+  document.getElementById("choice-account").addEventListener("click", startNewAccountForm);
   document.getElementById("choice-cancel").addEventListener("click", closeModal);
 });
 
@@ -235,7 +235,8 @@ function showAddCategoryForm() {
   });
 }
 
-function showAccountForm() {
+function startNewAccountForm() {
+  pendingAccount = { title: "", email: "", username: "", password: "", notes: "", url: "" };
   pendingCustomFields = [];
   renderAccountForm();
 }
@@ -255,30 +256,30 @@ function renderAccountForm() {
     <p class="modal-title">Add an Account</p>
     <div class="modal-field">
       <label>What account? (e.g. Instagram, Facebook)</label>
-      <input type="text" id="acc-title">
+      <input type="text" id="acc-title" value="${escapeHtml(pendingAccount.title)}">
     </div>
     <div class="modal-field">
       <label>Email (optional)</label>
-      <input type="text" id="acc-email">
+      <input type="text" id="acc-email" value="${escapeHtml(pendingAccount.email)}">
     </div>
     <div class="modal-field">
       <label>Username (optional)</label>
-      <input type="text" id="acc-username">
+      <input type="text" id="acc-username" value="${escapeHtml(pendingAccount.username)}">
     </div>
     <div class="modal-field">
       <label>Password</label>
       <div class="modal-field-row">
-        <input type="password" id="acc-password">
+        <input type="password" id="acc-password" value="${escapeHtml(pendingAccount.password)}">
         <button type="button" class="icon-button" id="acc-toggle-password">\u{1F441}</button>
       </div>
     </div>
     <div class="modal-field">
       <label>Notes (optional)</label>
-      <input type="text" id="acc-notes">
+      <input type="text" id="acc-notes" value="${escapeHtml(pendingAccount.notes)}">
     </div>
     <div class="modal-field">
       <label>URL (optional)</label>
-      <input type="text" id="acc-url">
+      <input type="text" id="acc-url" value="${escapeHtml(pendingAccount.url)}">
     </div>
     <div id="custom-fields-container">${customFieldsHtml}</div>
     <button type="button" class="add-field-link" id="add-field-button">+ Add Field</button>
@@ -289,15 +290,6 @@ function renderAccountForm() {
     </div>
   `);
 
-  if (pendingAccount) {
-    document.getElementById("acc-title").value = pendingAccount.title || "";
-    document.getElementById("acc-email").value = pendingAccount.email || "";
-    document.getElementById("acc-username").value = pendingAccount.username || "";
-    document.getElementById("acc-password").value = pendingAccount.password || "";
-    document.getElementById("acc-notes").value = pendingAccount.notes || "";
-    document.getElementById("acc-url").value = pendingAccount.url || "";
-  }
-
   document.getElementById("acc-toggle-password").addEventListener("click", () => {
     const passwordField = document.getElementById("acc-password");
     passwordField.type = passwordField.type === "password" ? "text" : "password";
@@ -306,6 +298,7 @@ function renderAccountForm() {
   document.getElementById("add-field-button").addEventListener("click", () => {
     const label = prompt("Field Name (e.g. Phone Number)");
     if (label) {
+      saveMainFieldValues();
       saveCurrentFieldValues();
       pendingCustomFields.push({ label: label, value: "" });
       renderAccountForm();
@@ -314,6 +307,7 @@ function renderAccountForm() {
 
   document.querySelectorAll(".remove-field-button").forEach((button) => {
     button.addEventListener("click", () => {
+      saveMainFieldValues();
       saveCurrentFieldValues();
       const index = parseInt(button.dataset.remove, 10);
       pendingCustomFields.splice(index, 1);
@@ -325,6 +319,15 @@ function renderAccountForm() {
   document.getElementById("acc-continue").addEventListener("click", onAccountContinue);
 }
 
+function saveMainFieldValues() {
+  pendingAccount.title = document.getElementById("acc-title").value;
+  pendingAccount.email = document.getElementById("acc-email").value;
+  pendingAccount.username = document.getElementById("acc-username").value;
+  pendingAccount.password = document.getElementById("acc-password").value;
+  pendingAccount.notes = document.getElementById("acc-notes").value;
+  pendingAccount.url = document.getElementById("acc-url").value;
+}
+
 function saveCurrentFieldValues() {
   document.querySelectorAll(".custom-field-value").forEach((input) => {
     const index = parseInt(input.dataset.index, 10);
@@ -333,9 +336,12 @@ function saveCurrentFieldValues() {
 }
 
 function onAccountContinue() {
-  const title = document.getElementById("acc-title").value.trim();
-  const password = document.getElementById("acc-password").value;
+  saveMainFieldValues();
+  saveCurrentFieldValues();
+
   const errorLabel = document.getElementById("acc-error");
+  const title = pendingAccount.title.trim();
+  const password = pendingAccount.password;
 
   if (!title) {
     errorLabel.textContent = "Please enter what account this is (e.g. Instagram).";
@@ -345,18 +351,6 @@ function onAccountContinue() {
     errorLabel.textContent = "Password is required.";
     return;
   }
-
-  saveCurrentFieldValues();
-
-  pendingAccount = {
-    title: title,
-    email: document.getElementById("acc-email").value.trim(),
-    username: document.getElementById("acc-username").value.trim(),
-    password: password,
-    notes: document.getElementById("acc-notes").value.trim(),
-    url: document.getElementById("acc-url").value.trim(),
-    custom_fields: pendingCustomFields.slice(),
-  };
 
   showCategoryPicker();
 }
@@ -384,17 +378,32 @@ async function showCategoryPicker() {
   `);
 
   document.getElementById("picker-back").addEventListener("click", () => {
-    showAccountForm();
+    renderAccountForm();
   });
 
   document.getElementById("picker-save").addEventListener("click", async () => {
     const selected = document.querySelector('input[name="category-pick"]:checked');
-    pendingAccount.category = selected ? selected.value : null;
+    const category = selected ? selected.value : null;
 
-    await window.pywebview.api.save_account(pendingAccount);
+    const dataToSave = {
+      title: pendingAccount.title.trim(),
+      email: pendingAccount.email.trim(),
+      username: pendingAccount.username.trim(),
+      password: pendingAccount.password,
+      notes: pendingAccount.notes.trim(),
+      url: pendingAccount.url.trim(),
+      category: category,
+      custom_fields: pendingCustomFields.slice(),
+    };
+
+    await window.pywebview.api.save_account(dataToSave);
     closeModal();
     loadEntries();
   });
 }
 
-loadEntries();
+if (window.pywebview) {
+  loadEntries();
+} else {
+  window.addEventListener("pywebviewready", loadEntries);
+}
