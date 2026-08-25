@@ -195,3 +195,15 @@ input[type="password"]::-ms-reveal,
 input[type="password"]::-ms-clear {
   display: none;
 }
+
+.icon-svg {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+
+.icon-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
