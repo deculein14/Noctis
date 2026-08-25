@@ -7,3 +7,5 @@ It started as a password manager, but its goal has expanded beyond passwords. No
 
 ## Status
 Early development — project setup in progress.
+
+> Vibe coded.
