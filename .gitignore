@@ -12,6 +12,7 @@ master_password*
 *.sqlite3
 users.json
 login_guards.json
+pending_verifications.json
 
 # OS junk files
 Thumbs.db
