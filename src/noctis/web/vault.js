@@ -23,10 +23,26 @@ function closeModal() {
 function openModal(contentHtml) {
   modalBox.innerHTML = contentHtml;
   modalOverlay.classList.add("visible");
+
+  requestAnimationFrame(() => {
+    const firstField = modalBox.querySelector("input, textarea");
+    if (firstField) firstField.focus();
+  });
 }
 
 modalOverlay.addEventListener("click", (event) => {
   if (event.target === modalOverlay) closeModal();
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape") return;
+  if (modalOverlay.classList.contains("visible")) {
+    closeModal();
+    return;
+  }
+  if (detailView.style.display !== "none" || groupListView.style.display !== "none") {
+    showMainView();
+  }
 });
 
 // ---------- Data loading ----------
@@ -304,7 +320,7 @@ function renderAccountForm() {
         <label>${escapeHtml(field.label)}</label>
         <input type="text" class="custom-field-value" data-index="${index}" value="${escapeHtml(field.value)}">
       </div>
-      <button type="button" class="remove-field-button" data-remove="${index}"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      <button type="button" class="remove-field-button" data-remove="${index}" aria-label="Remove field"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     </div>
   `).join("");
 
@@ -326,7 +342,7 @@ function renderAccountForm() {
       <label>Password</label>
       <div class="modal-field-row">
         <input type="password" id="acc-password" value="${escapeHtml(pendingAccount.password)}">
-        <button type="button" class="icon-button" id="acc-toggle-password"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+        <button type="button" class="icon-button" id="acc-toggle-password" aria-label="Show or hide password"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
       </div>
     </div>
     <div class="modal-field">
@@ -508,6 +524,8 @@ function promptForMasterPassword(messageText) {
 
 let lastCopiedText = null;
 
+const CHECK_ICON = `<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+
 function copyText(text) {
   navigator.clipboard.writeText(text);
   lastCopiedText = text;
@@ -523,6 +541,24 @@ function copyText(text) {
   }, 30000);
 }
 
+function flashCopied(button) {
+  const original = button.innerHTML;
+  button.innerHTML = CHECK_ICON;
+  button.classList.add("copied-flash");
+  button.disabled = true;
+  setTimeout(() => {
+    button.innerHTML = original;
+    button.classList.remove("copied-flash");
+    button.disabled = false;
+  }, 1200);
+}
+
+function fadeInView(element) {
+  element.classList.remove("view-fade-in");
+  void element.offsetWidth;
+  element.classList.add("view-fade-in");
+}
+
 // ---------- Detail (View) screen ----------
 
 const mainView = document.getElementById("main-view");
@@ -533,6 +569,7 @@ function showMainView() {
   mainView.style.display = "block";
   groupListView.style.display = "none";
   detailView.style.display = "none";
+  fadeInView(mainView);
   loadEntries();
 }
 
@@ -546,6 +583,7 @@ async function showDetailView(entryId) {
   mainView.style.display = "none";
   groupListView.style.display = "none";
   detailView.style.display = "block";
+  fadeInView(detailView);
 
   let revealedPassword = null;
 
@@ -557,7 +595,7 @@ async function showDetailView(entryId) {
       <div class="detail-field-label">${escapeHtml(label)}</div>
       <div class="detail-field-value-row">
         <span class="detail-field-value">${escapeHtml(value)}</span>
-        <button type="button" class="field-icon-button copy-field" data-value="${escapeHtml(value)}"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+        <button type="button" class="field-icon-button copy-field" data-value="${escapeHtml(value)}" aria-label="Copy ${escapeHtml(label)}"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
       </div>
     </div>
   `).join("");
@@ -570,7 +608,7 @@ async function showDetailView(entryId) {
       <div class="detail-field-label">${escapeHtml(label)}</div>
       <div class="detail-field-value-row">
         <span class="detail-field-value">${escapeHtml(value)}</span>
-        <button type="button" class="field-icon-button copy-field" data-value="${escapeHtml(value)}"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+        <button type="button" class="field-icon-button copy-field" data-value="${escapeHtml(value)}" aria-label="Copy ${escapeHtml(label)}"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
       </div>
     </div>
   `).join("");
@@ -580,7 +618,7 @@ async function showDetailView(entryId) {
       <div class="detail-field-label">${escapeHtml(label)}</div>
       <div class="detail-field-value-row">
         <span class="detail-field-value">${escapeHtml(value)}</span>
-        <button type="button" class="field-icon-button copy-field" data-value="${escapeHtml(value)}"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+        <button type="button" class="field-icon-button copy-field" data-value="${escapeHtml(value)}" aria-label="Copy ${escapeHtml(label)}"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
       </div>
     </div>
   `).join("");
@@ -589,7 +627,7 @@ async function showDetailView(entryId) {
     <div class="detail-header">
       <h1>${escapeHtml(details.title)}</h1>
     </div>
-    <p class="detail-category">${details.category ? escapeHtml(details.category) : ""}</p>
+    ${details.category ? `<span class="detail-category-badge">${escapeHtml(details.category)}</span>` : '<div style="height: 20px;"></div>'}
 
     ${fieldsHtml}
 
@@ -597,8 +635,8 @@ async function showDetailView(entryId) {
       <div class="detail-field-label">Password</div>
       <div class="detail-field-value-row">
         <span class="detail-field-value" id="password-display">\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022</span>
-        <button type="button" class="field-icon-button" id="reveal-password-btn"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
-        <button type="button" class="field-icon-button" id="copy-password-btn"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+        <button type="button" class="field-icon-button" id="reveal-password-btn" aria-label="Reveal password"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+        <button type="button" class="field-icon-button" id="copy-password-btn" aria-label="Copy password"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
       </div>
       <p class="detail-error" id="password-error"></p>
     </div>
@@ -621,6 +659,7 @@ async function showDetailView(entryId) {
   document.querySelectorAll(".copy-field").forEach((button) => {
     button.addEventListener("click", () => {
       copyText(button.dataset.value);
+      flashCopied(button);
     });
   });
 
@@ -639,10 +678,12 @@ async function showDetailView(entryId) {
     }
   });
 
-  document.getElementById("copy-password-btn").addEventListener("click", async () => {
+  document.getElementById("copy-password-btn").addEventListener("click", async (event) => {
     const errorLabel = document.getElementById("password-error");
+    const copyBtn = event.currentTarget;
     if (revealedPassword !== null) {
       copyText(revealedPassword);
+      flashCopied(copyBtn);
       return;
     }
     const entered = await promptForMasterPassword("Enter your master password to copy this");
@@ -653,6 +694,7 @@ async function showDetailView(entryId) {
       document.getElementById("password-display").textContent = revealedPassword;
       errorLabel.textContent = "";
       copyText(revealedPassword);
+      flashCopied(copyBtn);
     } else {
       errorLabel.textContent = result.message;
     }
@@ -710,6 +752,7 @@ function showGroupList(groupEntries) {
   mainView.style.display = "none";
   detailView.style.display = "none";
   groupListView.style.display = "block";
+  fadeInView(groupListView);
 
   renderGroupList(groupEntries);
 }
