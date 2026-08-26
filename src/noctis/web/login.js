@@ -9,17 +9,23 @@ const statusMessage = document.getElementById("status-message");
 const submitButton = document.getElementById("submit-button");
 const modeSwitch = document.getElementById("mode-switch");
 const togglePassword = document.getElementById("toggle-password");
+const confirmPasswordField = document.getElementById("confirm-password-field");
+const confirmPasswordInput = document.getElementById("confirm-password-input");
+const toggleConfirmPassword = document.getElementById("toggle-confirm-password");
 
 function updateModeDisplay() {
   statusMessage.textContent = "";
   if (mode === "login") {
     modeSubtitle.textContent = "Log in to your vault";
     emailField.style.display = "none";
+    confirmPasswordField.style.display = "none";
+    confirmPasswordInput.value = "";
     submitButton.textContent = "Log In";
     modeSwitch.textContent = "No account yet? Register";
   } else {
     modeSubtitle.textContent = "Create a new account";
     emailField.style.display = "block";
+    confirmPasswordField.style.display = "block";
     submitButton.textContent = "Create Account";
     modeSwitch.textContent = "Already have an account? Log in";
   }
@@ -37,6 +43,12 @@ togglePassword.addEventListener("click", () => {
   const isPassword = passwordInput.type === "password";
   passwordInput.type = isPassword ? "text" : "password";
   togglePassword.innerHTML = isPassword ? EYE_OFF_ICON : EYE_ICON;
+});
+
+toggleConfirmPassword.addEventListener("click", () => {
+  const isPassword = confirmPasswordInput.type === "password";
+  confirmPasswordInput.type = isPassword ? "text" : "password";
+  toggleConfirmPassword.innerHTML = isPassword ? EYE_OFF_ICON : EYE_ICON;
 });
 
 submitButton.addEventListener("click", async () => {
@@ -58,11 +70,16 @@ submitButton.addEventListener("click", async () => {
       statusMessage.textContent = "Master password must be at least 5 characters.";
       return;
     }
+    if (password !== confirmPasswordInput.value) {
+      statusMessage.textContent = "Passwords do not match.";
+      return;
+    }
     const result = await window.pywebview.api.register_user(username, email, password);
     if (result.success) {
       mode = "login";
       updateModeDisplay();
       passwordInput.value = "";
+      confirmPasswordInput.value = "";
       statusMessage.style.color = "#22C55E";
       statusMessage.textContent = "Account created! Please log in.";
     } else {

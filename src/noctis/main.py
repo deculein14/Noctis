@@ -9,7 +9,7 @@ class Api:
         self.current_username = None
         self.session = security.VaultSession()
 
-    # ---------- Auth ----------
+
 
     def register_user(self, username, email, password):
         if security.user_exists(username):
@@ -44,7 +44,7 @@ class Api:
         self.current_username = None
         return {"success": True}
 
-    # ---------- Vault data ----------
+    
 
     def _row_to_dict(self, row):
         return {

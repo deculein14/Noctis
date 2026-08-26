@@ -21,6 +21,10 @@ User wanted real CSS animations/hover transitions, which tkinter cannot do (no a
 7. Final wiring and cleanup — remaining: decide whether the `web_test` proof-of-concept pattern needs anything else, review for consistency, confirm no leftover placeholder `alert()`s remain, then resume the original numbered roadmap (Testing, Error Handling, Packaging, Final Security Review, v0.1.0 Release).
 8. ✅ DONE — Professional design system overhaul (CSS-only, no backend/JS logic changes): introduced CSS custom properties (design tokens) in `style.css` covering color (deep night-blue background with a layered elevation scale: bg → surface-1 → surface-2 → surface-3), spacing (strict 4px-based scale), radius, and shadow values, applied consistently across `style.css` and `vault.css`. Typography hierarchy established: uppercase letter-spaced micro-labels (11px) for field labels vs. readable body text (14px) for values. Button hierarchy: primary actions stay solid-filled, secondary actions (Cancel/Back) became outlined/ghost to reduce visual competition. Entry-row subtitles ("1 account"/"N accounts") became small pill badges. Modals gained real depth via layered shadows and a subtle backdrop blur. Added an app tagline ("Local. Encrypted. Yours.") under the Noctis title for identity.
 9. ✅ DONE — Replaced all emoji icons (👁 📋 ★ ☆ × +) with a monochrome inline SVG icon set using `stroke="currentColor"` / `fill="currentColor"`, so icons properly inherit the theme's colors and respond to hover/active states like real icons, instead of rendering as colorful OS emoji that clashed with the design system. Covers: password show/hide (login + account form, swaps between open/crossed-eye SVGs on toggle), per-field copy buttons in the View screen, password reveal/copy buttons, remove-custom-field button, favorite star (filled/outline variants), and the main "+" add button. Added `.icon-svg` sizing/centering CSS rules to `style.css` and `vault.css`.
+10. ✅ DONE — Repo housekeeping: added `LICENSE` (MIT, with a plain-English "In short" summary explaining the credit requirement) and `.gitattributes` (normalizes all text files to LF line endings, eliminating the recurring "LF will be replaced by CRLF" Git warning seen throughout the project). Repository visibility decision: made public on GitHub (user's decision, after verifying via `git log --all --full-history` that no sensitive files — `.env`, `users.json`, `*.db` — were ever committed at any point in history).
+11. ✅ DONE — Accessibility and interaction polish pass on the Add Account/Category modal (applying `/ui-ux-pro-max` principles manually, since its live search tool/database is not available in this sandboxed environment — only its instructions file is present): added `aria-label`s to icon-only buttons, visible focus rings (`:focus-visible`) on every interactive element, increased icon-button touch targets to 40px minimum, added a subtle fade+scale modal entrance animation (respects `prefers-reduced-motion`), auto-focus on the first field when any modal opens, and `Escape` key closes the active modal.
+12. ✅ DONE — Bundled the Inter variable font (`web/fonts/Inter-Variable.ttf`, fetched from the official Google Fonts GitHub mirror so the app has zero runtime internet dependency, consistent with Noctis's offline-first design) via `@font-face` in `style.css`, replacing the plain Segoe UI system font across the entire app for a more modern, refined typeface. Single variable-font file covers all weights (100–900) already in use.
+13. ✅ DONE — View screen redesign for visual richness (again applying `/ui-ux-pro-max` principles manually): added a colored avatar circle per account (deterministic color generated from a hash of the account name, so the same account always gets the same color), field-type icons (mail/person/lock/note/link/tag) beside each label, grouped fields into "Login Details" and "Additional Information" sections with subtle dividers, wrapped the whole view in an elevated card instead of floating on the bare background, and rendered the revealed password in a monospace font for easier character verification. Extended the same fade-in transition, copy-confirmation flash (checkmark replaces the copy icon briefly), and `Escape`-to-go-back behavior established in item 11 to the View and group-list screens.
 
 ## Completed Steps
 1. Git & GitHub setup — local repo initialized, private GitHub repo created, connected, pushed.
@@ -66,7 +70,7 @@ User wanted real CSS animations/hover transitions, which tkinter cannot do (no a
     - Confirmed filter-chip order (All → Favorites → categories alphabetically) already matched the requested ordering — no change needed there.
 
 ## Current Task
-None in progress — awaiting confirmation to resume Step 17 (Testing).
+None in progress — design/polish pass complete for now. Awaiting confirmation to resume Step 17 (Testing), or further ad hoc UI refinements if requested.
 
 ## Next Planned Step
 Step 17 — Testing (automated tests, likely via `pytest`, covering `security.py` and `database.py` at minimum, given how much has changed in both).
@@ -83,7 +87,16 @@ Step 17 — Testing (automated tests, likely via `pytest`, covering `security.py
 - cryptography==50.0.0
 - cffi==2.1.1
 - pycparser==3.0
-- pywebview (installed via pip; not yet confirmed added to requirements.txt — verify/add during next session)
+- bottle==0.13.4
+- clr_loader==0.3.1
+- proxy_tools==0.1.0
+- pythonnet==3.1.0
+- pywebview==6.2.1
+- typing_extensions==4.16.0
+(all confirmed correctly added to `requirements.txt`; an earlier accidental self-referential `-e git+https://github.com/deculein14/Noctis.git...` line from `pip freeze` was manually removed)
+
+## Bundled Assets
+- `src/noctis/web/fonts/Inter-Variable.ttf` — Inter variable font (all weights 100–900 in one file), fetched once from the Google Fonts GitHub mirror and committed to the repo so the app never needs internet access to render its own typeface.
 
 ## Important Decisions Made
 - Passwords and notes are always encrypted before touching the database; only metadata (title/account name, entry-username, category, timestamps, email) is stored in plain columns.
