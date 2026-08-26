@@ -553,6 +553,16 @@ function flashCopied(button) {
   }, 1200);
 }
 
+function getAvatarColor(name) {
+  const colors = ["#6C7CF7", "#34D399", "#F0576B", "#F59E0B", "#38BDF8", "#A78BFA", "#FB7185", "#4ADE80"];
+  const text = name || "?";
+  let hash = 0;
+  for (let i = 0; i < text.length; i++) {
+    hash = text.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return colors[Math.abs(hash) % colors.length];
+}
+
 function fadeInView(element) {
   element.classList.remove("view-fade-in");
   void element.offsetWidth;
@@ -587,72 +597,73 @@ async function showDetailView(entryId) {
 
   let revealedPassword = null;
 
-  const fieldsHtml = [
-    ["Email", details.email],
-    ["Username", details.username],
-  ].filter(([, value]) => value).map(([label, value]) => `
-    <div class="detail-field">
-      <div class="detail-field-label">${escapeHtml(label)}</div>
-      <div class="detail-field-value-row">
-        <span class="detail-field-value">${escapeHtml(value)}</span>
-        <button type="button" class="field-icon-button copy-field" data-value="${escapeHtml(value)}" aria-label="Copy ${escapeHtml(label)}"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
-      </div>
-    </div>
-  `).join("");
+  const avatarColor = getAvatarColor(details.title);
+  const avatarLetter = (details.title || "?").trim().charAt(0).toUpperCase();
 
-  const trailingFieldsHtml = [
-    ["Notes", details.notes],
-    ["URL", details.url],
-  ].filter(([, value]) => value).map(([label, value]) => `
-    <div class="detail-field">
-      <div class="detail-field-label">${escapeHtml(label)}</div>
-      <div class="detail-field-value-row">
-        <span class="detail-field-value">${escapeHtml(value)}</span>
-        <button type="button" class="field-icon-button copy-field" data-value="${escapeHtml(value)}" aria-label="Copy ${escapeHtml(label)}"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+  function fieldRow(icon, label, value) {
+    if (!value) return "";
+    return `
+      <div class="detail-field">
+        <div class="detail-field-label-row">
+          <span class="detail-field-icon">${icon}</span>
+          <span class="detail-field-label">${escapeHtml(label)}</span>
+        </div>
+        <div class="detail-field-value-row">
+          <span class="detail-field-value">${escapeHtml(value)}</span>
+          <button type="button" class="field-icon-button copy-field" data-value="${escapeHtml(value)}" aria-label="Copy ${escapeHtml(label)}"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+        </div>
       </div>
-    </div>
-  `).join("");
+    `;
+  }
 
-  const customFieldsHtml = details.custom_fields.map(({ label, value }) => `
-    <div class="detail-field">
-      <div class="detail-field-label">${escapeHtml(label)}</div>
-      <div class="detail-field-value-row">
-        <span class="detail-field-value">${escapeHtml(value)}</span>
-        <button type="button" class="field-icon-button copy-field" data-value="${escapeHtml(value)}" aria-label="Copy ${escapeHtml(label)}"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
-      </div>
-    </div>
-  `).join("");
+  const loginFieldsHtml = [
+    ['<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>', "Email", details.email],
+    ['<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>', "Username", details.username],
+  ].map(([icon, label, value]) => fieldRow(icon, label, value)).join("");
+
+  const additionalFieldsHtml = [
+    ['<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>', "Notes", details.notes],
+    ['<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>', "URL", details.url],
+  ].map(([icon, label, value]) => fieldRow(icon, label, value)).join("")
+  + details.custom_fields.map(({ label, value }) => fieldRow('<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41 13.42 20.6a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>', label, value)).join("");
 
   detailView.innerHTML = `
-    <div class="detail-header">
-      <h1>${escapeHtml(details.title)}</h1>
-    </div>
-    ${details.category ? `<span class="detail-category-badge">${escapeHtml(details.category)}</span>` : '<div style="height: 20px;"></div>'}
-
-    ${fieldsHtml}
-
-    <div class="detail-field">
-      <div class="detail-field-label">Password</div>
-      <div class="detail-field-value-row">
-        <span class="detail-field-value" id="password-display">\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022</span>
-        <button type="button" class="field-icon-button" id="reveal-password-btn" aria-label="Reveal password"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
-        <button type="button" class="field-icon-button" id="copy-password-btn" aria-label="Copy password"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+    <div class="detail-card">
+      <div class="detail-hero">
+        <div class="detail-avatar" style="background: ${avatarColor}">${escapeHtml(avatarLetter)}</div>
+        <div>
+          <h1 class="detail-hero-title">${escapeHtml(details.title)}</h1>
+          ${details.category ? `<span class="detail-category-badge">${escapeHtml(details.category)}</span>` : ""}
+        </div>
       </div>
-      <p class="detail-error" id="password-error"></p>
-    </div>
 
-    ${trailingFieldsHtml}
-    ${customFieldsHtml}
+      ${loginFieldsHtml ? `<div class="detail-section-label">Login Details</div>${loginFieldsHtml}` : ""}
 
-    <div class="detail-secondary-row">
-      <button type="button" id="favorite-toggle-btn">${details.is_favorite ? '<svg class="icon-svg" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>' : '<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>'}${details.is_favorite ? " Unfavorite" : " Favorite"}</button>
-      <button type="button" class="danger-text" id="delete-entry-btn">Delete</button>
-    </div>
+      <div class="detail-field">
+        <div class="detail-field-label-row">
+          <span class="detail-field-icon"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
+          <span class="detail-field-label">Password</span>
+        </div>
+        <div class="detail-field-value-row">
+          <span class="detail-field-value detail-password-value" id="password-display">\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022</span>
+          <button type="button" class="field-icon-button" id="reveal-password-btn" aria-label="Reveal password"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+          <button type="button" class="field-icon-button" id="copy-password-btn" aria-label="Copy password"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+        </div>
+        <p class="detail-error" id="password-error"></p>
+      </div>
 
-    <p class="detail-error" id="edit-error"></p>
-    <div class="detail-button-row">
-      <button class="modal-secondary" id="detail-back-btn">Back</button>
-      <button class="modal-primary" id="detail-edit-btn">Edit</button>
+      ${additionalFieldsHtml ? `<div class="detail-section-label">Additional Information</div>${additionalFieldsHtml}` : ""}
+
+      <div class="detail-secondary-row">
+        <button type="button" id="favorite-toggle-btn">${details.is_favorite ? '<svg class="icon-svg" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>' : '<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>'}${details.is_favorite ? " Unfavorite" : " Favorite"}</button>
+        <button type="button" class="danger-text" id="delete-entry-btn">Delete</button>
+      </div>
+
+      <p class="detail-error" id="edit-error"></p>
+      <div class="detail-button-row">
+        <button class="modal-secondary" id="detail-back-btn">Back</button>
+        <button class="modal-primary" id="detail-edit-btn">Edit</button>
+      </div>
     </div>
   `;
 
