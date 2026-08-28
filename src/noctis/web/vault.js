@@ -800,6 +800,28 @@ async function renderGroupList(groupEntries) {
   document.getElementById("group-back-btn").addEventListener("click", showMainView);
 }
 
+// ---------- Sidebar navigation ----------
+
+const sidebarItems = document.querySelectorAll(".sidebar-item");
+const contentSections = document.querySelectorAll(".content-section");
+
+sidebarItems.forEach((item) => {
+  item.addEventListener("click", () => {
+    const targetSection = item.dataset.section;
+
+    sidebarItems.forEach((i) => i.classList.remove("active"));
+    item.classList.add("active");
+
+    contentSections.forEach((section) => {
+      section.style.display = section.id === `section-${targetSection}` ? "block" : "none";
+    });
+
+    if (targetSection === "accounts") {
+      showMainView();
+    }
+  });
+});
+
 if (window.pywebview) {
   loadEntries();
 } else {

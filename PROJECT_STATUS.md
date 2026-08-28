@@ -79,7 +79,15 @@ User wanted real CSS animations/hover transitions, which tkinter cannot do (no a
     - Confirmed filter-chip order (All → Favorites → categories alphabetically) already matched the requested ordering — no change needed there.
 
 ## Current Task
-None in progress — design/polish pass complete for now. Awaiting confirmation to resume Step 17 (Testing), or further ad hoc UI refinements if requested.
+None in progress — design/polish pass complete for now. Next requested feature (not yet started, noted for next session): add a sidebar navigation to the vault screen, anticipating many more features being added over time.
+
+**Sidebar spec as described by user:**
+- Sections: Accounts, Settings, Subscriptions, Images, Videos
+- Order (top to bottom): **Accounts** pinned to top, **Settings** pinned to bottom, remaining items (Images, Subscriptions, Videos) in alphabetical order in between.
+  - Final order: Accounts → Images → Subscriptions → Videos → Settings
+- "Accounts" should show the existing vault functionality (the current entry list/search/categories/favorites/View screen — everything already built). This is not a new page, just the existing main content reachable via the sidebar.
+- Images, Subscriptions, Videos, and Settings are new sections with **no functionality yet** — clicking them should navigate to an empty/placeholder page for now. The goal of this first pass is just getting the sidebar itself working correctly (navigation, layout, active-state highlighting) — content for those sections comes later as separate future work.
+- Not yet discussed: whether the sidebar is fixed or collapsible, what icon (if any) accompanies each label, and what the placeholder pages should say/look like beyond being empty.
 
 ## Next Planned Step
 Step 17 — Testing (automated tests, likely via `pytest`, covering `security.py` and `database.py` at minimum, given how much has changed in both).
@@ -121,17 +129,19 @@ Step 17 — Testing (automated tests, likely via `pytest`, covering `security.py
 - Editing an entry (from the View screen) also requires master-password re-authentication before the edit form opens.
 - Deleting an entry requires an explicit confirmation popup ("This cannot be undone") — no longer deletes on a single click.
 - Multiple accounts can share the same account name (e.g. two "Facebook" logins) and are grouped together in the list, distinguished by their Notes field (e.g. "Main acc" / "Alt acc").
-- GitHub repository is private.
+- Email addresses are now verified at registration via a one-time 6-digit code sent through the user's own Gmail account — this is Noctis's first and only feature requiring internet access; all other functionality (login, vault CRUD) remains fully offline.
+- GitHub repository is public (changed from private after verifying, via full Git history search, that no secrets were ever committed).
 
 ## Known Issues
 None currently.
 
 ## Important Unfinished Work
-- Planned future enhancement (not yet scheduled to a specific step): email alert to a Gmail address after 5 failed master-password attempts. Requires Gmail API/SMTP setup.
-- Planned future enhancement (proposed, not yet built): one-time Recovery Key system generated at registration, as the safe answer to "forgot master password," and groundwork for a future recovery flow.
+- Planned future enhancement (not yet scheduled to a specific step): email alert to a Gmail address after 5 failed master-password attempts. Now technically easier since Gmail-sending infrastructure (`smtplib` + App Password) already exists from the email verification feature — could reuse `security.py`'s email-sending pattern.
+- Planned future enhancement (proposed, not yet built): one-time Recovery Key system generated at registration, as the safe answer to "forgot master password," and groundwork for a future recovery flow. Now more feasible than before since email delivery infrastructure exists — a recovery key or reset link could be emailed the same way verification codes are.
 - Known/accepted limitations (not planned to be fully solved): no OS-level file permission hardening on per-user `.db` files or `users.json`; in-memory encryption key is set to None on lock but not guaranteed to be wiped from RAM immediately (relies on Python garbage collection).
 - `config.DATABASE_FILENAME` in `config.py` is unused (superseded by per-user filenames) — harmless leftover.
 - Edit mode for existing accounts uses a single combined screen (fields + category together) rather than the two-step wizard used for creation — an intentional simplification, not a bug.
+- If a user abandons registration after requesting a code but before entering it, that pending verification sits in `pending_verifications.json` until its 10-minute expiry — harmless (never becomes an account, file is git-ignored) but not actively cleaned up early.
 
 ## Architecture Changes
 - Multi-User Login/Vaults — changed from a single global vault to per-username accounts with isolated storage (salt, verification token, lockout state, database file per user).

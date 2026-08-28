@@ -201,8 +201,9 @@ def main():
         "Noctis",
         get_web_path("login.html"),
         js_api=api,
-        width=500,
-        height=650,
+        width=1200,
+        height=800,
+        resizable=False,
     )
     webview.start()
 
