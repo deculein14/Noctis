@@ -189,6 +189,76 @@ class Api:
         plaintext = self.session.decrypt(entry["encrypted_password"])
         return {"success": True, "password": plaintext}
 
+    # ---------- Subscriptions ----------
+
+    def get_subscriptions(self):
+        rows = database.get_all_subscriptions(self.current_username)
+        return [
+            {
+                "id": row["id"],
+                "name": row["name"],
+                "plan": row["plan"],
+                "date_started": row["date_started"],
+                "date_ended": row["date_ended"],
+            }
+            for row in rows
+        ]
+
+    def get_subscription_details(self, subscription_id):
+        rows = database.get_all_subscriptions(self.current_username)
+        sub = next((row for row in rows if row["id"] == subscription_id), None)
+        if sub is None:
+            return {"success": False, "message": "Subscription not found."}
+
+        field_rows = database.get_subscription_fields(self.current_username, subscription_id)
+        fields = [{"label": row["label"], "value": row["value"]} for row in field_rows]
+
+        return {
+            "success": True,
+            "id": sub["id"],
+            "name": sub["name"],
+            "plan": sub["plan"],
+            "date_started": sub["date_started"],
+            "date_ended": sub["date_ended"],
+            "fields": fields,
+        }
+
+    def save_subscription(self, data):
+        subscription_id = database.add_subscription(
+            self.current_username,
+            data.get("name"),
+            data.get("plan") or None,
+            data.get("date_started") or None,
+            data.get("date_ended") or None,
+        )
+        for field in data.get("fields", []):
+            label = field.get("label")
+            value = field.get("value")
+            if label and value:
+                database.add_subscription_field(self.current_username, subscription_id, label, value)
+        return {"success": True, "subscription_id": subscription_id}
+
+    def update_subscription(self, subscription_id, data):
+        database.update_subscription(
+            self.current_username,
+            subscription_id,
+            data.get("name"),
+            data.get("plan") or None,
+            data.get("date_started") or None,
+            data.get("date_ended") or None,
+        )
+        database.delete_subscription_fields(self.current_username, subscription_id)
+        for field in data.get("fields", []):
+            label = field.get("label")
+            value = field.get("value")
+            if label and value:
+                database.add_subscription_field(self.current_username, subscription_id, label, value)
+        return {"success": True}
+
+    def delete_subscription(self, subscription_id):
+        database.delete_subscription(self.current_username, subscription_id)
+        return {"success": True}
+
 
 def get_web_path(filename):
     base_dir = os.path.dirname(os.path.abspath(__file__))

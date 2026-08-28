@@ -45,6 +45,26 @@ def initialize_database(username):
             FOREIGN KEY (entry_id) REFERENCES entries (id) ON DELETE CASCADE
         )
     """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS subscriptions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            plan TEXT,
+            date_started TEXT,
+            date_ended TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS subscription_fields (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            subscription_id INTEGER NOT NULL,
+            label TEXT NOT NULL,
+            value TEXT,
+            FOREIGN KEY (subscription_id) REFERENCES subscriptions (id) ON DELETE CASCADE
+        )
+    """)
     connection.commit()
     connection.close()
 
@@ -144,6 +164,78 @@ def toggle_favorite(username, entry_id, is_favorite):
         UPDATE entries SET is_favorite = ?, updated_at = ?
         WHERE id = ?
     """, (1 if is_favorite else 0, now, entry_id))
+    connection.commit()
+    connection.close()
+
+
+def add_subscription(username, name, plan=None, date_started=None, date_ended=None):
+    connection = get_connection(username)
+    cursor = connection.cursor()
+    now = datetime.now(timezone.utc).isoformat()
+    cursor.execute("""
+        INSERT INTO subscriptions (name, plan, date_started, date_ended, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, (name, plan, date_started, date_ended, now, now))
+    connection.commit()
+    new_id = cursor.lastrowid
+    connection.close()
+    return new_id
+
+
+def get_all_subscriptions(username):
+    connection = get_connection(username)
+    cursor = connection.cursor()
+    cursor.execute("SELECT * FROM subscriptions ORDER BY name")
+    rows = cursor.fetchall()
+    connection.close()
+    return rows
+
+
+def update_subscription(username, subscription_id, name, plan=None, date_started=None, date_ended=None):
+    connection = get_connection(username)
+    cursor = connection.cursor()
+    now = datetime.now(timezone.utc).isoformat()
+    cursor.execute("""
+        UPDATE subscriptions
+        SET name = ?, plan = ?, date_started = ?, date_ended = ?, updated_at = ?
+        WHERE id = ?
+    """, (name, plan, date_started, date_ended, now, subscription_id))
+    connection.commit()
+    connection.close()
+
+
+def delete_subscription(username, subscription_id):
+    connection = get_connection(username)
+    cursor = connection.cursor()
+    cursor.execute("DELETE FROM subscriptions WHERE id = ?", (subscription_id,))
+    connection.commit()
+    connection.close()
+
+
+def add_subscription_field(username, subscription_id, label, value):
+    connection = get_connection(username)
+    cursor = connection.cursor()
+    cursor.execute("""
+        INSERT INTO subscription_fields (subscription_id, label, value)
+        VALUES (?, ?, ?)
+    """, (subscription_id, label, value))
+    connection.commit()
+    connection.close()
+
+
+def get_subscription_fields(username, subscription_id):
+    connection = get_connection(username)
+    cursor = connection.cursor()
+    cursor.execute("SELECT * FROM subscription_fields WHERE subscription_id = ? ORDER BY id", (subscription_id,))
+    rows = cursor.fetchall()
+    connection.close()
+    return rows
+
+
+def delete_subscription_fields(username, subscription_id):
+    connection = get_connection(username)
+    cursor = connection.cursor()
+    cursor.execute("DELETE FROM subscription_fields WHERE subscription_id = ?", (subscription_id,))
     connection.commit()
     connection.close()
 
