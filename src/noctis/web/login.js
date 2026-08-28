@@ -12,6 +12,10 @@ const togglePassword = document.getElementById("toggle-password");
 const confirmPasswordField = document.getElementById("confirm-password-field");
 const confirmPasswordInput = document.getElementById("confirm-password-input");
 const toggleConfirmPassword = document.getElementById("toggle-confirm-password");
+const codeField = document.getElementById("code-field");
+const codeInput = document.getElementById("code-input");
+
+let pendingRegistration = null;
 
 function updateModeDisplay() {
   statusMessage.textContent = "";
@@ -20,14 +24,36 @@ function updateModeDisplay() {
     emailField.style.display = "none";
     confirmPasswordField.style.display = "none";
     confirmPasswordInput.value = "";
+    codeField.style.display = "none";
+    codeInput.value = "";
+    usernameInput.disabled = false;
+    emailInput.disabled = false;
+    passwordInput.disabled = false;
+    confirmPasswordInput.disabled = false;
     submitButton.textContent = "Log In";
+    modeSwitch.style.display = "block";
     modeSwitch.textContent = "No account yet? Register";
-  } else {
+  } else if (mode === "register") {
     modeSubtitle.textContent = "Create a new account";
     emailField.style.display = "block";
     confirmPasswordField.style.display = "block";
-    submitButton.textContent = "Create Account";
+    codeField.style.display = "none";
+    usernameInput.disabled = false;
+    emailInput.disabled = false;
+    passwordInput.disabled = false;
+    confirmPasswordInput.disabled = false;
+    submitButton.textContent = "Send Verification Code";
+    modeSwitch.style.display = "block";
     modeSwitch.textContent = "Already have an account? Log in";
+  } else if (mode === "awaiting_code") {
+    modeSubtitle.textContent = `We sent a 6-digit code to ${pendingRegistration.email}`;
+    codeField.style.display = "block";
+    usernameInput.disabled = true;
+    emailInput.disabled = true;
+    passwordInput.disabled = true;
+    confirmPasswordInput.disabled = true;
+    submitButton.textContent = "Verify & Create Account";
+    modeSwitch.style.display = "none";
   }
 }
 
@@ -52,30 +78,86 @@ toggleConfirmPassword.addEventListener("click", () => {
 });
 
 submitButton.addEventListener("click", async () => {
-  const username = usernameInput.value.trim();
-  const password = passwordInput.value;
-  const email = emailInput.value.trim();
+  if (mode === "login") {
+    const username = usernameInput.value.trim();
+    const password = passwordInput.value;
 
-  if (!username) {
-    statusMessage.textContent = "Please enter a username.";
+    if (!username) {
+      statusMessage.style.color = "#EF4444";
+      statusMessage.textContent = "Please enter a username.";
+      return;
+    }
+
+    const result = await window.pywebview.api.login_user(username, password);
+    if (result.success) {
+      window.location.href = "vault.html";
+    } else {
+      statusMessage.style.color = "#EF4444";
+      statusMessage.textContent = result.message;
+    }
     return;
   }
 
   if (mode === "register") {
+    const username = usernameInput.value.trim();
+    const password = passwordInput.value;
+    const email = emailInput.value.trim();
+
+    if (!username) {
+      statusMessage.style.color = "#EF4444";
+      statusMessage.textContent = "Please enter a username.";
+      return;
+    }
     if (!email || !email.includes("@")) {
+      statusMessage.style.color = "#EF4444";
       statusMessage.textContent = "Please enter a valid email address.";
       return;
     }
     if (password.length < 5) {
+      statusMessage.style.color = "#EF4444";
       statusMessage.textContent = "Master password must be at least 5 characters.";
       return;
     }
     if (password !== confirmPasswordInput.value) {
+      statusMessage.style.color = "#EF4444";
       statusMessage.textContent = "Passwords do not match.";
       return;
     }
-    const result = await window.pywebview.api.register_user(username, email, password);
+
+    statusMessage.style.color = "#8B93A7";
+    statusMessage.textContent = "Sending verification code...";
+
+    const result = await window.pywebview.api.request_registration_code(username, email, password);
     if (result.success) {
+      pendingRegistration = { username, email, password };
+      mode = "awaiting_code";
+      updateModeDisplay();
+      statusMessage.style.color = "#8B93A7";
+      statusMessage.textContent = "";
+    } else {
+      statusMessage.style.color = "#EF4444";
+      statusMessage.textContent = result.message;
+    }
+    return;
+  }
+
+  if (mode === "awaiting_code") {
+    const code = codeInput.value.trim();
+    if (!code) {
+      statusMessage.style.color = "#EF4444";
+      statusMessage.textContent = "Please enter the code sent to your email.";
+      return;
+    }
+
+    const result = await window.pywebview.api.confirm_registration(
+      pendingRegistration.username,
+      pendingRegistration.email,
+      pendingRegistration.password,
+      code
+    );
+
+    if (result.success) {
+      pendingRegistration = null;
       mode = "login";
       updateModeDisplay();
       passwordInput.value = "";
@@ -84,13 +166,6 @@ submitButton.addEventListener("click", async () => {
       statusMessage.textContent = "Account created! Please log in.";
     } else {
       statusMessage.style.color = "#EF4444";
-      statusMessage.textContent = result.message;
-    }
-  } else {
-    const result = await window.pywebview.api.login_user(username, password);
-    if (result.success) {
-      window.location.href = "vault.html";
-    } else {
       statusMessage.textContent = result.message;
     }
   }

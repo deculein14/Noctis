@@ -9,13 +9,22 @@ class Api:
         self.current_username = None
         self.session = security.VaultSession()
 
+    # ---------- Auth ----------
 
-
-    def register_user(self, username, email, password):
+    def request_registration_code(self, username, email, password):
         if security.user_exists(username):
             return {"success": False, "message": "An account already exists for this username. Please log in instead."}
         if security.email_in_use(email):
             return {"success": False, "message": "This email is already associated with another account."}
+        if len(password) < 5:
+            return {"success": False, "message": "Master password must be at least 5 characters."}
+
+        return security.send_verification_code(email)
+
+    def confirm_registration(self, username, email, password, code):
+        result = security.check_verification_code(email, code)
+        if not result["success"]:
+            return result
 
         security.register_user(username, email, password)
         return {"success": True}
@@ -44,7 +53,7 @@ class Api:
         self.current_username = None
         return {"success": True}
 
-    
+    # ---------- Vault data ----------
 
     def _row_to_dict(self, row):
         return {
