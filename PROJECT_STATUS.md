@@ -34,6 +34,18 @@ User wanted real CSS animations/hover transitions, which tkinter cannot do (no a
     - New `main.py` API methods: `request_registration_code` (validates username/email/password rules first, then sends the code) and `confirm_registration` (checks the code, then registers). The old single-step `register_user` API method was removed/replaced by these two.
     - Fixed a minor input bug: the verification code field originally let spaces/non-digit characters consume slots up to its 6-character limit (e.g. one space + 5 digits); added a live `input` filter (`replace(/\\D/g, "")`) so only digits are ever accepted.
     - `pending_verifications.json` added to `.gitignore`. `account_log.txt` (from earlier work, holds username/email pairs for the user's own reference — no passwords) was found to be missing from `.gitignore` during this session and has now been added.
+16. ✅ DONE — Fixed window size and sidebar navigation:
+    - Window is now fixed at **1200×800**, non-resizable (`resizable=False` in `webview.create_window()` in `main.py`) — same size for every user, no maximize/minimize-to-different-size drift.
+    - Added a persistent left sidebar to `vault.html`, replacing the old single-page layout. Final agreed order: **Accounts** (top) → **Subscriptions** → **Images & Videos** (combined into one item/page, since related) → **Settings** (bottom).
+    - "Accounts" reuses all pre-existing vault functionality (list, search, categories, favorites, View screen) unchanged — just now reached via the sidebar instead of being the only page.
+    - "Images & Videos" and "Settings" are still empty placeholder pages (title + "This section is coming soon") — no spec discussed yet for either.
+    - Sidebar click handling in `vault.js` swaps which `.content-section` is visible and highlights the active item; each section's specific `show...MainView()` function (e.g. `showMainView()`, `showSubscriptionsMainView()`) is called on activation to (re)load that section's data fresh.
+17. ✅ DONE (built, not yet tested/committed as of end of this conversation) — Subscriptions feature, first real content in the new sidebar:
+    - New database tables (`database.py`): `subscriptions` (name, plan, date_started, date_ended, timestamps) and `subscription_fields` (arbitrary label/value pairs per subscription, e.g. benefits — stored as **plain text, not encrypted**, since subscription info isn't a secret like a password; explicit decision, differs from the Accounts encryption model).
+    - New CRUD functions: `add_subscription`, `get_all_subscriptions`, `update_subscription`, `delete_subscription`, `add_subscription_field`, `get_subscription_fields`, `delete_subscription_fields`.
+    - New `main.py` API methods: `get_subscriptions`, `get_subscription_details`, `save_subscription`, `update_subscription`, `delete_subscription` — no master-password re-authentication gating (unlike Accounts' password reveal/edit), consistent with the "not a secret" decision above.
+    - New UI in `vault.js`/`vault.html`: list view (name + plan shown per row, matching the Accounts row style), an add/edit modal with Subscription Name, Plan, Date Availed, Date Ended (native `<input type="date">` fields), plus a "+ Add Field" mechanism identical in pattern to Accounts' custom fields (for listing benefits or other arbitrary info). A detail/View screen (avatar circle, grouped fields, Edit/Delete/Back) mirrors the Accounts View screen's visual style for consistency, minus the password-specific parts.
+    - **Not yet done:** user testing of the full add/view/edit/delete cycle, cleanup of test data, git commit/push. This is the very next thing to do when work resumes.
 
 ## Completed Steps
 1. Git & GitHub setup — local repo initialized, private GitHub repo created, connected, pushed.
@@ -79,18 +91,10 @@ User wanted real CSS animations/hover transitions, which tkinter cannot do (no a
     - Confirmed filter-chip order (All → Favorites → categories alphabetically) already matched the requested ordering — no change needed there.
 
 ## Current Task
-None in progress — design/polish pass complete for now. Next requested feature (not yet started, noted for next session): add a sidebar navigation to the vault screen, anticipating many more features being added over time.
-
-**Sidebar spec as described by user:**
-- Sections: Accounts, Settings, Subscriptions, Images, Videos
-- Order (top to bottom): **Accounts** pinned to top, **Settings** pinned to bottom, remaining items (Images, Subscriptions, Videos) in alphabetical order in between.
-  - Final order: Accounts → Images → Subscriptions → Videos → Settings
-- "Accounts" should show the existing vault functionality (the current entry list/search/categories/favorites/View screen — everything already built). This is not a new page, just the existing main content reachable via the sidebar.
-- Images, Subscriptions, Videos, and Settings are new sections with **no functionality yet** — clicking them should navigate to an empty/placeholder page for now. The goal of this first pass is just getting the sidebar itself working correctly (navigation, layout, active-state highlighting) — content for those sections comes later as separate future work.
-- Not yet discussed: whether the sidebar is fixed or collapsible, what icon (if any) accompanies each label, and what the placeholder pages should say/look like beyond being empty.
+Sidebar navigation and Subscriptions feature just built (see items 16-17 below) — awaiting user testing/confirmation before commit. **This conversation is ending here; a new conversation will continue the work.** See "Handoff Notes for New Conversation" at the very bottom of this file for exactly what to do first.
 
 ## Next Planned Step
-Step 17 — Testing (automated tests, likely via `pytest`, covering `security.py` and `database.py` at minimum, given how much has changed in both).
+Immediate: test and commit the Subscriptions feature (see item 17). After that: build out the two remaining empty sidebar sections (Images & Videos, Settings — no spec discussed yet for either). Longer-term: resume the original roadmap — Testing, Error Handling, Packaging, Final Security Review, v0.1.0 Release.
 
 ## Technology Stack
 - Language: Python 3.14.5
@@ -147,3 +151,20 @@ None currently.
 - Multi-User Login/Vaults — changed from a single global vault to per-username accounts with isolated storage (salt, verification token, lockout state, database file per user).
 - Account creation UX — replaced the single flat "Add Entry" form with a "+" → Category/Account choice, a richer account form (email, notes, custom fields), and a separate category-selection step before saving.
 - Database schema — `entries` table extended (email, encrypted_notes); new `categories` and `custom_fields` tables added to support the above.
+- UI framework — migrated from tkinter to pywebview + HTML/CSS/JS (see item 1-13 above under Completed Steps for the full migration history and the critical `window.load_url()` freeze-bug lesson).
+- Layout — moved from a single-page vault view to a persistent sidebar with multiple sections (Accounts, Subscriptions, Images & Videos, Settings), each independently loadable.
+- Database schema (second wave) — added `subscriptions` and `subscription_fields` tables alongside the original `entries`/`categories`/`custom_fields`, for a second, differently-modeled feature (plain text, no encryption, no re-auth) within the same per-user `.db` file.
+
+---
+
+## Handoff Notes for a New Conversation
+
+This project has grown a long conversation history. To keep future sessions fast and cheap (token cost scales with total conversation length, not just the size of what you type), work is continuing in a **fresh conversation** starting now.
+
+**What to do when starting that new conversation:**
+1. Paste this entire `PROJECT_STATUS.md` file as your first message.
+2. Optionally, also paste the current `style.css` and `vault.css` content if the first task involves visual/theme work — these are foundational and small enough to include upfront.
+3. For anything else (`vault.js`, `main.py`, `security.py`, `database.py`, `login.js`, `login.html`, `vault.html`), **do not paste them preemptively** — per this project's own "Current Code Only" rule (established early in the original conversation), Claude should ask for a file's current content before editing it, and you should just paste whatever's asked for. This avoids the new conversation growing bloated with files that aren't relevant to the immediate task.
+4. The very first real task in the new conversation should be: **test the Subscriptions feature** (add/view/edit/delete cycle), clean up test data, then `git add`/`commit`/`push`. Everything needed to do this is already built — see item 17 above.
+5. `resizable=False` and the 1200×800 fixed window size are already set in `main.py` — no need to redo this.
+6. The design system (dark theme, Inter font, SVG icon set, spacing/color tokens) is fully established in `style.css`/`vault.css` — a new session should ask to see these before making any visual changes, rather than guessing colors/spacing.
