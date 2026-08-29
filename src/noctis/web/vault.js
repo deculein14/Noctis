@@ -818,9 +818,278 @@ sidebarItems.forEach((item) => {
 
     if (targetSection === "accounts") {
       showMainView();
+    } else if (targetSection === "subscriptions") {
+      showSubscriptionsMainView();
     }
   });
 });
+
+// ---------- Subscriptions ----------
+
+let pendingSubscription = null;
+let pendingSubscriptionFields = [];
+let editingSubscriptionId = null;
+
+const subscriptionsMainView = document.getElementById("subscriptions-main-view");
+const subscriptionDetailView = document.getElementById("subscription-detail-view");
+const subscriptionsContainer = document.getElementById("subscriptions-container");
+const addSubscriptionButton = document.getElementById("add-subscription-button");
+
+function showSubscriptionsMainView() {
+  subscriptionsMainView.style.display = "block";
+  subscriptionDetailView.style.display = "none";
+  fadeInView(subscriptionsMainView);
+  loadSubscriptions();
+}
+
+async function loadSubscriptions() {
+  const subscriptions = await window.pywebview.api.get_subscriptions();
+  subscriptionsContainer.innerHTML = "";
+
+  if (subscriptions.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "empty-state";
+    empty.textContent = "No subscriptions yet.";
+    subscriptionsContainer.appendChild(empty);
+    return;
+  }
+
+  subscriptions.forEach((sub) => {
+    subscriptionsContainer.appendChild(buildSubscriptionRow(sub));
+  });
+}
+
+function buildSubscriptionRow(sub) {
+  const row = document.createElement("div");
+  row.className = "entry-row";
+
+  const info = document.createElement("div");
+  info.className = "entry-info";
+  const subtitle = sub.plan ? escapeHtml(sub.plan) : "No plan set";
+  info.innerHTML = `<h3>${escapeHtml(sub.name)}</h3><p>${subtitle}</p>`;
+  row.appendChild(info);
+
+  const actions = document.createElement("div");
+  actions.className = "entry-actions";
+
+  const viewButton = document.createElement("button");
+  viewButton.className = "action-button";
+  viewButton.textContent = "View";
+  viewButton.addEventListener("click", () => {
+    showSubscriptionDetailView(sub.id);
+  });
+  actions.appendChild(viewButton);
+
+  row.appendChild(actions);
+  return row;
+}
+
+addSubscriptionButton.addEventListener("click", () => {
+  startNewSubscriptionForm();
+});
+
+function startNewSubscriptionForm() {
+  pendingSubscription = { name: "", plan: "", date_started: "", date_ended: "" };
+  pendingSubscriptionFields = [];
+  editingSubscriptionId = null;
+  renderSubscriptionForm();
+}
+
+function renderSubscriptionForm() {
+  const fieldsHtml = pendingSubscriptionFields.map((field, index) => `
+    <div class="custom-field-row">
+      <div class="modal-field">
+        <label>${escapeHtml(field.label)}</label>
+        <input type="text" class="sub-field-value" data-index="${index}" value="${escapeHtml(field.value)}">
+      </div>
+      <button type="button" class="remove-field-button" data-remove="${index}" aria-label="Remove field"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+  `).join("");
+
+  openModal(`
+    <p class="modal-title">${editingSubscriptionId !== null ? "Edit Subscription" : "Add Subscription"}</p>
+    <div class="modal-field">
+      <label>Subscription Name (e.g. Spotify)</label>
+      <input type="text" id="sub-name" value="${escapeHtml(pendingSubscription.name)}">
+    </div>
+    <div class="modal-field">
+      <label>Plan (e.g. Student Plan)</label>
+      <input type="text" id="sub-plan" value="${escapeHtml(pendingSubscription.plan)}">
+    </div>
+    <div class="modal-field">
+      <label>Date Availed</label>
+      <input type="date" id="sub-date-started" value="${escapeHtml(pendingSubscription.date_started)}">
+    </div>
+    <div class="modal-field">
+      <label>Date Ended (optional)</label>
+      <input type="date" id="sub-date-ended" value="${escapeHtml(pendingSubscription.date_ended)}">
+    </div>
+    <div id="sub-fields-container">${fieldsHtml}</div>
+    <button type="button" class="add-field-link" id="sub-add-field-button">+ Add Field</button>
+    <p class="modal-error" id="sub-error"></p>
+    <div class="modal-button-row">
+      <button class="modal-secondary" id="sub-cancel">Cancel</button>
+      <button class="modal-primary" id="sub-save">Save</button>
+    </div>
+  `);
+
+  document.getElementById("sub-add-field-button").addEventListener("click", () => {
+    const label = prompt("Field Name (e.g. Benefit)");
+    if (label) {
+      saveSubscriptionMainValues();
+      saveSubscriptionFieldValues();
+      pendingSubscriptionFields.push({ label: label, value: "" });
+      renderSubscriptionForm();
+    }
+  });
+
+  document.querySelectorAll("#sub-fields-container .remove-field-button").forEach((button) => {
+    button.addEventListener("click", () => {
+      saveSubscriptionMainValues();
+      saveSubscriptionFieldValues();
+      const index = parseInt(button.dataset.remove, 10);
+      pendingSubscriptionFields.splice(index, 1);
+      renderSubscriptionForm();
+    });
+  });
+
+  document.getElementById("sub-cancel").addEventListener("click", closeSubscriptionModal);
+  document.getElementById("sub-save").addEventListener("click", onSubscriptionSave);
+}
+
+function saveSubscriptionMainValues() {
+  pendingSubscription.name = document.getElementById("sub-name").value;
+  pendingSubscription.plan = document.getElementById("sub-plan").value;
+  pendingSubscription.date_started = document.getElementById("sub-date-started").value;
+  pendingSubscription.date_ended = document.getElementById("sub-date-ended").value;
+}
+
+function saveSubscriptionFieldValues() {
+  document.querySelectorAll(".sub-field-value").forEach((input) => {
+    const index = parseInt(input.dataset.index, 10);
+    pendingSubscriptionFields[index].value = input.value;
+  });
+}
+
+function closeSubscriptionModal() {
+  closeModal();
+  pendingSubscription = null;
+  pendingSubscriptionFields = [];
+  editingSubscriptionId = null;
+}
+
+async function onSubscriptionSave() {
+  saveSubscriptionMainValues();
+  saveSubscriptionFieldValues();
+
+  const errorLabel = document.getElementById("sub-error");
+  const name = pendingSubscription.name.trim();
+
+  if (!name) {
+    errorLabel.textContent = "Please enter a subscription name.";
+    return;
+  }
+
+  const dataToSave = {
+    name: name,
+    plan: pendingSubscription.plan.trim(),
+    date_started: pendingSubscription.date_started,
+    date_ended: pendingSubscription.date_ended,
+    fields: pendingSubscriptionFields.slice(),
+  };
+
+  if (editingSubscriptionId !== null) {
+    await window.pywebview.api.update_subscription(editingSubscriptionId, dataToSave);
+  } else {
+    await window.pywebview.api.save_subscription(dataToSave);
+  }
+
+  closeSubscriptionModal();
+  showSubscriptionsMainView();
+}
+
+async function showSubscriptionDetailView(subscriptionId) {
+  const details = await window.pywebview.api.get_subscription_details(subscriptionId);
+  if (!details.success) {
+    alert(details.message);
+    return;
+  }
+
+  subscriptionsMainView.style.display = "none";
+  subscriptionDetailView.style.display = "block";
+  fadeInView(subscriptionDetailView);
+
+  const avatarColor = getAvatarColor(details.name);
+  const avatarLetter = (details.name || "?").trim().charAt(0).toUpperCase();
+
+  function subFieldRow(label, value) {
+    if (!value) return "";
+    return `
+      <div class="detail-field">
+        <div class="detail-field-label-row">
+          <span class="detail-field-label">${escapeHtml(label)}</span>
+        </div>
+        <div class="detail-field-value-row">
+          <span class="detail-field-value">${escapeHtml(value)}</span>
+        </div>
+      </div>
+    `;
+  }
+
+  const coreFieldsHtml =
+    subFieldRow("Plan", details.plan) +
+    subFieldRow("Date Availed", details.date_started) +
+    subFieldRow("Date Ended", details.date_ended);
+
+  const extraFieldsHtml = details.fields.map(({ label, value }) => subFieldRow(label, value)).join("");
+
+  subscriptionDetailView.innerHTML = `
+    <div class="detail-card">
+      <div class="detail-hero">
+        <div class="detail-avatar" style="background: ${avatarColor}">${escapeHtml(avatarLetter)}</div>
+        <div>
+          <h1 class="detail-hero-title">${escapeHtml(details.name)}</h1>
+        </div>
+      </div>
+
+      ${coreFieldsHtml}
+      ${extraFieldsHtml ? `<div class="detail-section-label">Additional Information</div>${extraFieldsHtml}` : ""}
+
+      <div class="detail-secondary-row">
+        <button type="button" class="danger-text" id="sub-delete-btn">Delete</button>
+      </div>
+
+      <div class="detail-button-row">
+        <button class="modal-secondary" id="sub-back-btn">Back</button>
+        <button class="modal-primary" id="sub-edit-btn">Edit</button>
+      </div>
+    </div>
+  `;
+
+  document.getElementById("sub-back-btn").addEventListener("click", showSubscriptionsMainView);
+
+  document.getElementById("sub-delete-btn").addEventListener("click", async () => {
+    const confirmed = confirm(`Are you sure you want to delete "${details.name}"? This cannot be undone.`);
+    if (confirmed) {
+      await window.pywebview.api.delete_subscription(subscriptionId);
+      showSubscriptionsMainView();
+    }
+  });
+
+  document.getElementById("sub-edit-btn").addEventListener("click", () => {
+    pendingSubscription = {
+      name: details.name || "",
+      plan: details.plan || "",
+      date_started: details.date_started || "",
+      date_ended: details.date_ended || "",
+    };
+    pendingSubscriptionFields = details.fields.map((f) => ({ label: f.label, value: f.value }));
+    editingSubscriptionId = details.id;
+    subscriptionsMainView.style.display = "block";
+    subscriptionDetailView.style.display = "none";
+    renderSubscriptionForm();
+  });
+}
 
 if (window.pywebview) {
   loadEntries();

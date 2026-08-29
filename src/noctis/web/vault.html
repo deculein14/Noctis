@@ -56,10 +56,16 @@
     </section>
 
     <section id="section-subscriptions" class="content-section" style="display:none;">
-      <div class="placeholder-page">
-        <h1 class="placeholder-title">Subscriptions</h1>
-        <p class="placeholder-text">This section is coming soon.</p>
+      <div id="subscriptions-main-view">
+        <div class="vault-header">
+          <h1 class="vault-title">Subscriptions</h1>
+          <button class="add-button" id="add-subscription-button"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+        </div>
+
+        <div class="entries-container" id="subscriptions-container"></div>
       </div>
+
+      <div id="subscription-detail-view" style="display:none;"></div>
     </section>
 
     <section id="section-media" class="content-section" style="display:none;">
