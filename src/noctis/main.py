@@ -213,6 +213,9 @@ class Api:
         field_rows = database.get_subscription_fields(self.current_username, subscription_id)
         fields = [{"label": row["label"], "value": row["value"]} for row in field_rows]
 
+        privilege_rows = database.get_subscription_privileges(self.current_username, subscription_id)
+        privileges = [row["value"] for row in privilege_rows]
+
         return {
             "success": True,
             "id": sub["id"],
@@ -221,6 +224,7 @@ class Api:
             "date_started": sub["date_started"],
             "date_ended": sub["date_ended"],
             "fields": fields,
+            "privileges": privileges,
         }
 
     def save_subscription(self, data):
@@ -236,6 +240,11 @@ class Api:
             value = field.get("value")
             if label and value:
                 database.add_subscription_field(self.current_username, subscription_id, label, value)
+
+        for privilege in data.get("privileges", []):
+            if privilege:
+                database.add_subscription_privilege(self.current_username, subscription_id, privilege)
+
         return {"success": True, "subscription_id": subscription_id}
 
     def update_subscription(self, subscription_id, data):
@@ -253,6 +262,12 @@ class Api:
             value = field.get("value")
             if label and value:
                 database.add_subscription_field(self.current_username, subscription_id, label, value)
+
+        database.delete_subscription_privileges(self.current_username, subscription_id)
+        for privilege in data.get("privileges", []):
+            if privilege:
+                database.add_subscription_privilege(self.current_username, subscription_id, privilege)
+
         return {"success": True}
 
     def delete_subscription(self, subscription_id):

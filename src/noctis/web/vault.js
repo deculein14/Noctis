@@ -828,6 +828,7 @@ sidebarItems.forEach((item) => {
 
 let pendingSubscription = null;
 let pendingSubscriptionFields = [];
+let pendingSubscriptionPrivileges = [];
 let editingSubscriptionId = null;
 
 const subscriptionsMainView = document.getElementById("subscriptions-main-view");
@@ -891,11 +892,12 @@ addSubscriptionButton.addEventListener("click", () => {
 function startNewSubscriptionForm() {
   pendingSubscription = { name: "", plan: "", date_started: "", date_ended: "" };
   pendingSubscriptionFields = [];
+  pendingSubscriptionPrivileges = [];
   editingSubscriptionId = null;
   renderSubscriptionForm();
 }
 
-function renderSubscriptionForm() {
+function renderSubscriptionForm(focusLastPrivilege) {
   const fieldsHtml = pendingSubscriptionFields.map((field, index) => `
     <div class="custom-field-row">
       <div class="modal-field">
@@ -903,6 +905,13 @@ function renderSubscriptionForm() {
         <input type="text" class="sub-field-value" data-index="${index}" value="${escapeHtml(field.value)}">
       </div>
       <button type="button" class="remove-field-button" data-remove="${index}" aria-label="Remove field"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+  `).join("");
+
+  const privilegesHtml = pendingSubscriptionPrivileges.map((value, index) => `
+    <div class="custom-field-row">
+      <input type="text" class="privilege-value" data-index="${index}" placeholder="e.g. No ads" value="${escapeHtml(value)}">
+      <button type="button" class="remove-field-button" data-remove-privilege="${index}" aria-label="Remove privilege"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     </div>
   `).join("");
 
@@ -924,6 +933,13 @@ function renderSubscriptionForm() {
       <label>Date Ended (optional)</label>
       <input type="date" id="sub-date-ended" value="${escapeHtml(pendingSubscription.date_ended)}">
     </div>
+
+    <div class="modal-field">
+      <label>Privileges</label>
+      <div id="privileges-container">${privilegesHtml}</div>
+      <button type="button" class="add-field-link" id="add-privilege-button">+ Add Privilege</button>
+    </div>
+
     <div id="sub-fields-container">${fieldsHtml}</div>
     <button type="button" class="add-field-link" id="sub-add-field-button">+ Add Field</button>
     <p class="modal-error" id="sub-error"></p>
@@ -934,10 +950,11 @@ function renderSubscriptionForm() {
   `);
 
   document.getElementById("sub-add-field-button").addEventListener("click", () => {
-    const label = prompt("Field Name (e.g. Benefit)");
+    const label = prompt("Field Name (e.g. Renewal Date)");
     if (label) {
       saveSubscriptionMainValues();
       saveSubscriptionFieldValues();
+      saveSubscriptionPrivilegeValues();
       pendingSubscriptionFields.push({ label: label, value: "" });
       renderSubscriptionForm();
     }
@@ -947,14 +964,39 @@ function renderSubscriptionForm() {
     button.addEventListener("click", () => {
       saveSubscriptionMainValues();
       saveSubscriptionFieldValues();
+      saveSubscriptionPrivilegeValues();
       const index = parseInt(button.dataset.remove, 10);
       pendingSubscriptionFields.splice(index, 1);
       renderSubscriptionForm();
     });
   });
 
+  document.getElementById("add-privilege-button").addEventListener("click", () => {
+    saveSubscriptionMainValues();
+    saveSubscriptionFieldValues();
+    saveSubscriptionPrivilegeValues();
+    pendingSubscriptionPrivileges.push("");
+    renderSubscriptionForm(true);
+  });
+
+  document.querySelectorAll("#privileges-container .remove-field-button").forEach((button) => {
+    button.addEventListener("click", () => {
+      saveSubscriptionMainValues();
+      saveSubscriptionFieldValues();
+      saveSubscriptionPrivilegeValues();
+      const index = parseInt(button.dataset.removePrivilege, 10);
+      pendingSubscriptionPrivileges.splice(index, 1);
+      renderSubscriptionForm();
+    });
+  });
+
   document.getElementById("sub-cancel").addEventListener("click", closeSubscriptionModal);
   document.getElementById("sub-save").addEventListener("click", onSubscriptionSave);
+
+  if (focusLastPrivilege) {
+    const privilegeInputs = document.querySelectorAll(".privilege-value");
+    if (privilegeInputs.length) privilegeInputs[privilegeInputs.length - 1].focus();
+  }
 }
 
 function saveSubscriptionMainValues() {
@@ -971,16 +1013,25 @@ function saveSubscriptionFieldValues() {
   });
 }
 
+function saveSubscriptionPrivilegeValues() {
+  document.querySelectorAll(".privilege-value").forEach((input) => {
+    const index = parseInt(input.dataset.index, 10);
+    pendingSubscriptionPrivileges[index] = input.value;
+  });
+}
+
 function closeSubscriptionModal() {
   closeModal();
   pendingSubscription = null;
   pendingSubscriptionFields = [];
+  pendingSubscriptionPrivileges = [];
   editingSubscriptionId = null;
 }
 
 async function onSubscriptionSave() {
   saveSubscriptionMainValues();
   saveSubscriptionFieldValues();
+  saveSubscriptionPrivilegeValues();
 
   const errorLabel = document.getElementById("sub-error");
   const name = pendingSubscription.name.trim();
@@ -990,12 +1041,17 @@ async function onSubscriptionSave() {
     return;
   }
 
+  const cleanPrivileges = pendingSubscriptionPrivileges
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
+
   const dataToSave = {
     name: name,
     plan: pendingSubscription.plan.trim(),
     date_started: pendingSubscription.date_started,
     date_ended: pendingSubscription.date_ended,
     fields: pendingSubscriptionFields.slice(),
+    privileges: cleanPrivileges,
   };
 
   if (editingSubscriptionId !== null) {
@@ -1041,6 +1097,16 @@ async function showSubscriptionDetailView(subscriptionId) {
     subFieldRow("Date Availed", details.date_started) +
     subFieldRow("Date Ended", details.date_ended);
 
+  const privileges = details.privileges || [];
+  const privilegesHtml = privileges.length > 0
+    ? `
+      <div class="detail-section-label">Privileges</div>
+      <ul class="privilege-list">
+        ${privileges.map((p) => `<li>${escapeHtml(p)}</li>`).join("")}
+      </ul>
+    `
+    : "";
+
   const extraFieldsHtml = details.fields.map(({ label, value }) => subFieldRow(label, value)).join("");
 
   subscriptionDetailView.innerHTML = `
@@ -1053,6 +1119,7 @@ async function showSubscriptionDetailView(subscriptionId) {
       </div>
 
       ${coreFieldsHtml}
+      ${privilegesHtml}
       ${extraFieldsHtml ? `<div class="detail-section-label">Additional Information</div>${extraFieldsHtml}` : ""}
 
       <div class="detail-secondary-row">
@@ -1084,6 +1151,7 @@ async function showSubscriptionDetailView(subscriptionId) {
       date_ended: details.date_ended || "",
     };
     pendingSubscriptionFields = details.fields.map((f) => ({ label: f.label, value: f.value }));
+    pendingSubscriptionPrivileges = (details.privileges || []).slice();
     editingSubscriptionId = details.id;
     subscriptionsMainView.style.display = "block";
     subscriptionDetailView.style.display = "none";

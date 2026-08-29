@@ -65,6 +65,14 @@ def initialize_database(username):
             FOREIGN KEY (subscription_id) REFERENCES subscriptions (id) ON DELETE CASCADE
         )
     """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS subscription_privileges (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            subscription_id INTEGER NOT NULL,
+            value TEXT NOT NULL,
+            FOREIGN KEY (subscription_id) REFERENCES subscriptions (id) ON DELETE CASCADE
+        )
+    """)
     connection.commit()
     connection.close()
 
@@ -236,6 +244,34 @@ def delete_subscription_fields(username, subscription_id):
     connection = get_connection(username)
     cursor = connection.cursor()
     cursor.execute("DELETE FROM subscription_fields WHERE subscription_id = ?", (subscription_id,))
+    connection.commit()
+    connection.close()
+
+
+def add_subscription_privilege(username, subscription_id, value):
+    connection = get_connection(username)
+    cursor = connection.cursor()
+    cursor.execute("""
+        INSERT INTO subscription_privileges (subscription_id, value)
+        VALUES (?, ?)
+    """, (subscription_id, value))
+    connection.commit()
+    connection.close()
+
+
+def get_subscription_privileges(username, subscription_id):
+    connection = get_connection(username)
+    cursor = connection.cursor()
+    cursor.execute("SELECT * FROM subscription_privileges WHERE subscription_id = ? ORDER BY id", (subscription_id,))
+    rows = cursor.fetchall()
+    connection.close()
+    return rows
+
+
+def delete_subscription_privileges(username, subscription_id):
+    connection = get_connection(username)
+    cursor = connection.cursor()
+    cursor.execute("DELETE FROM subscription_privileges WHERE subscription_id = ?", (subscription_id,))
     connection.commit()
     connection.close()
 
