@@ -193,16 +193,18 @@ class Api:
 
     def get_subscriptions(self):
         rows = database.get_all_subscriptions(self.current_username)
-        return [
-            {
+        result = []
+        for row in rows:
+            privilege_rows = database.get_subscription_privileges(self.current_username, row["id"])
+            result.append({
                 "id": row["id"],
                 "name": row["name"],
                 "plan": row["plan"],
                 "date_started": row["date_started"],
                 "date_ended": row["date_ended"],
-            }
-            for row in rows
-        ]
+                "privileges": [p["value"] for p in privilege_rows],
+            })
+        return result
 
     def get_subscription_details(self, subscription_id):
         rows = database.get_all_subscriptions(self.current_username)

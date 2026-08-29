@@ -860,28 +860,56 @@ async function loadSubscriptions() {
   });
 }
 
+function formatDateForDisplay(isoDateString) {
+  if (!isoDateString) return null;
+  const parsed = new Date(isoDateString + "T00:00:00");
+  if (isNaN(parsed.getTime())) return isoDateString;
+  return parsed.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+}
+
 function buildSubscriptionRow(sub) {
   const row = document.createElement("div");
-  row.className = "entry-row";
+  row.className = "entry-row subscription-row";
+  row.tabIndex = 0;
+  row.setAttribute("role", "button");
+  row.setAttribute("aria-label", `View ${sub.name}`);
 
-  const info = document.createElement("div");
-  info.className = "entry-info";
-  const subtitle = sub.plan ? escapeHtml(sub.plan) : "No plan set";
-  info.innerHTML = `<h3>${escapeHtml(sub.name)}</h3><p>${subtitle}</p>`;
-  row.appendChild(info);
+  const privileges = sub.privileges || [];
 
-  const actions = document.createElement("div");
-  actions.className = "entry-actions";
+  const planPillHtml = sub.plan
+    ? `<p>${escapeHtml(sub.plan)}</p>`
+    : `<p>No plan set</p>`;
 
-  const viewButton = document.createElement("button");
-  viewButton.className = "action-button";
-  viewButton.textContent = "View";
-  viewButton.addEventListener("click", () => {
-    showSubscriptionDetailView(sub.id);
+  const formattedEndDate = formatDateForDisplay(sub.date_ended);
+  const endDatePillHtml = formattedEndDate
+    ? `<p class="subscription-end-pill">Ends ${escapeHtml(formattedEndDate)}</p>`
+    : "";
+
+  const previewHtml = privileges.length > 0
+    ? `<ul>${privileges.map((p) => `<li>${escapeHtml(p)}</li>`).join("")}</ul>`
+    : `<p class="subscription-privileges-empty">No privileges listed yet.</p>`;
+
+  row.innerHTML = `
+    <div class="subscription-row-main">
+      <div class="entry-info">
+        <h3>${escapeHtml(sub.name)}</h3>
+        ${planPillHtml}
+        ${endDatePillHtml}
+      </div>
+    </div>
+    <div class="subscription-privileges-preview">${previewHtml}</div>
+  `;
+
+  const goToDetail = () => showSubscriptionDetailView(sub.id);
+
+  row.addEventListener("click", goToDetail);
+  row.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      goToDetail();
+    }
   });
-  actions.appendChild(viewButton);
 
-  row.appendChild(actions);
   return row;
 }
 
