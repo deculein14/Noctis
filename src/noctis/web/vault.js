@@ -12,6 +12,13 @@ const addButton = document.getElementById("add-button");
 const modalOverlay = document.getElementById("modal-overlay");
 const modalBox = document.getElementById("modal-box");
 
+function resetScroll() {
+  document.documentElement.scrollLeft = 0;
+  document.body.scrollLeft = 0;
+  const contentArea = document.querySelector(".content-area");
+  if (contentArea) contentArea.scrollLeft = 0;
+}
+
 function closeModal() {
   modalOverlay.classList.remove("visible");
   modalBox.innerHTML = "";
@@ -580,6 +587,7 @@ function showMainView() {
   groupListView.style.display = "none";
   detailView.style.display = "none";
   fadeInView(mainView);
+  resetScroll();
   loadEntries();
 }
 
@@ -594,6 +602,7 @@ async function showDetailView(entryId) {
   groupListView.style.display = "none";
   detailView.style.display = "block";
   fadeInView(detailView);
+  resetScroll();
 
   let revealedPassword = null;
 
@@ -764,6 +773,7 @@ function showGroupList(groupEntries) {
   detailView.style.display = "none";
   groupListView.style.display = "block";
   fadeInView(groupListView);
+  resetScroll();
 
   renderGroupList(groupEntries);
 }
@@ -805,22 +815,27 @@ async function renderGroupList(groupEntries) {
 const sidebarItems = document.querySelectorAll(".sidebar-item");
 const contentSections = document.querySelectorAll(".content-section");
 
+function activateSection(targetSection) {
+  sidebarItems.forEach((i) => i.classList.remove("active"));
+  const tab = document.querySelector(`.sidebar-item[data-section="${targetSection}"]`);
+  if (tab) tab.classList.add("active");
+
+  contentSections.forEach((section) => {
+    section.style.display = section.id === `section-${targetSection}` ? "block" : "none";
+  });
+
+  resetScroll();
+
+  if (targetSection === "accounts") {
+    showMainView();
+  } else if (targetSection === "subscriptions") {
+    showSubscriptionsMainView();
+  }
+}
+
 sidebarItems.forEach((item) => {
   item.addEventListener("click", () => {
-    const targetSection = item.dataset.section;
-
-    sidebarItems.forEach((i) => i.classList.remove("active"));
-    item.classList.add("active");
-
-    contentSections.forEach((section) => {
-      section.style.display = section.id === `section-${targetSection}` ? "block" : "none";
-    });
-
-    if (targetSection === "accounts") {
-      showMainView();
-    } else if (targetSection === "subscriptions") {
-      showSubscriptionsMainView();
-    }
+    activateSection(item.dataset.section);
   });
 });
 
@@ -840,6 +855,7 @@ function showSubscriptionsMainView() {
   subscriptionsMainView.style.display = "block";
   subscriptionDetailView.style.display = "none";
   fadeInView(subscriptionsMainView);
+  resetScroll();
   loadSubscriptions();
 }
 
@@ -1090,6 +1106,7 @@ async function onSubscriptionSave() {
 
   closeSubscriptionModal();
   showSubscriptionsMainView();
+  refreshNotifications();
 }
 
 async function showSubscriptionDetailView(subscriptionId) {
@@ -1102,6 +1119,7 @@ async function showSubscriptionDetailView(subscriptionId) {
   subscriptionsMainView.style.display = "none";
   subscriptionDetailView.style.display = "block";
   fadeInView(subscriptionDetailView);
+  resetScroll();
 
   const avatarColor = getAvatarColor(details.name);
   const avatarLetter = (details.name || "?").trim().charAt(0).toUpperCase();
@@ -1168,6 +1186,7 @@ async function showSubscriptionDetailView(subscriptionId) {
     if (confirmed) {
       await window.pywebview.api.delete_subscription(subscriptionId);
       showSubscriptionsMainView();
+      refreshNotifications();
     }
   });
 
@@ -1187,8 +1206,94 @@ async function showSubscriptionDetailView(subscriptionId) {
   });
 }
 
+// ---------- Renewal notifications ----------
+
+const RENEWAL_THRESHOLDS = [30, 7, 3, 1];
+
+const notificationBell = document.getElementById("notification-bell");
+const notificationDot = document.getElementById("notification-dot");
+const notificationDropdown = document.getElementById("notification-dropdown");
+
+function daysUntil(dateStr) {
+  const target = new Date(dateStr + "T00:00:00");
+  if (isNaN(target.getTime())) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const diffMs = target.getTime() - today.getTime();
+  return Math.round(diffMs / (1000 * 60 * 60 * 24));
+}
+
+function renewalLabel(days) {
+  if (days < 0) return `overdue by ${Math.abs(days)}d`;
+  if (days === 0) return "due today";
+  if (days === 1) return "ends tomorrow";
+  return `ends in ${days} days`;
+}
+
+function getDueSubscriptions(subscriptions) {
+  const due = [];
+  subscriptions.forEach((sub) => {
+    if (!sub.date_ended) return;
+    const days = daysUntil(sub.date_ended);
+    if (days === null) return;
+    if (days <= 0 || RENEWAL_THRESHOLDS.includes(days)) {
+      due.push({ id: sub.id, name: sub.name, days });
+    }
+  });
+  due.sort((a, b) => a.days - b.days);
+  return due;
+}
+
+function renderNotificationDropdown(dueList) {
+  if (dueList.length === 0) {
+    notificationDropdown.innerHTML = `<p class="notification-empty">No renewals coming up.</p>`;
+    return;
+  }
+
+  notificationDropdown.innerHTML = dueList.map((item) => `
+    <div class="notification-item" data-id="${item.id}">
+      <span class="notification-item-name">${escapeHtml(item.name)}</span>
+      <span class="notification-item-days">${escapeHtml(renewalLabel(item.days))}</span>
+    </div>
+  `).join("");
+
+  notificationDropdown.querySelectorAll(".notification-item").forEach((item) => {
+    item.addEventListener("click", () => {
+      const subId = parseInt(item.dataset.id, 10);
+      notificationDropdown.style.display = "none";
+      activateSection("subscriptions");
+      showSubscriptionDetailView(subId);
+    });
+  });
+}
+
+async function refreshNotifications() {
+  const subscriptions = await window.pywebview.api.get_subscriptions();
+  const due = getDueSubscriptions(subscriptions);
+  notificationDot.style.display = due.length > 0 ? "block" : "none";
+  renderNotificationDropdown(due);
+}
+
+notificationBell.addEventListener("click", (event) => {
+  event.stopPropagation();
+  const isOpen = notificationDropdown.style.display === "block";
+  notificationDropdown.style.display = isOpen ? "none" : "block";
+});
+
+document.addEventListener("click", (event) => {
+  if (!notificationBell.contains(event.target) && !notificationDropdown.contains(event.target)) {
+    notificationDropdown.style.display = "none";
+  }
+});
+
+// ---------- Init ----------
+
 if (window.pywebview) {
   loadEntries();
+  refreshNotifications();
 } else {
-  window.addEventListener("pywebviewready", loadEntries);
+  window.addEventListener("pywebviewready", () => {
+    loadEntries();
+    refreshNotifications();
+  });
 }
