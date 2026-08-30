@@ -46,6 +46,14 @@ User wanted real CSS animations/hover transitions, which tkinter cannot do (no a
     - New `main.py` API methods: `get_subscriptions`, `get_subscription_details`, `save_subscription`, `update_subscription`, `delete_subscription` — no master-password re-authentication gating (unlike Accounts' password reveal/edit), consistent with the "not a secret" decision above.
     - New UI in `vault.js`/`vault.html`: list view (name + plan shown per row, matching the Accounts row style), an add/edit modal with Subscription Name, Plan, Date Availed, Date Ended (native `<input type="date">` fields), plus a "+ Add Field" mechanism identical in pattern to Accounts' custom fields (for listing benefits or other arbitrary info). A detail/View screen (avatar circle, grouped fields, Edit/Delete/Back) mirrors the Accounts View screen's visual style for consistency, minus the password-specific parts.
     - **Not yet done:** user testing of the full add/view/edit/delete cycle, cleanup of test data, git commit/push. This is the very next thing to do when work resumes.
+18. ✅ DONE — Subscriptions UX overhaul, three linked changes:
+    - **Privileges list**: replaced the idea of a free-form "Add Field" as the only option for subscription perks with a dedicated, always-visible **Privileges** section (e.g. "No ads", "Better quality") — a plain growing list of text items, no label required, with its own "+ Add Privilege" and per-item remove button. The original "+ Add Field" (custom label/value pairs) was kept as-is for one-off fields, per explicit decision — Privileges is additive, not a replacement.
+      - New table `subscription_privileges` (id, subscription_id, value) in `database.py`, following the same pattern as `subscription_fields` but without a label column. New functions: `add_subscription_privilege`, `get_subscription_privileges`, `delete_subscription_privileges`.
+      - `main.py`: `save_subscription`/`update_subscription` now write privileges (clear-and-reinsert pattern, same as fields on update); `get_subscription_details` and `get_subscriptions` both return a `privileges` list.
+      - View screen shows Privileges as a bullet list under its own section label.
+    - **Hover-to-expand row, no separate View button**: subscription list rows no longer have a "View" button — the entire row is clickable (and keyboard-accessible: focusable, Enter/Space triggers it) and goes straight to the existing detail/View screen (which already has Edit built in, unchanged). Hovering (or keyboard-focusing) a row smoothly expands it in place to preview that subscription's privileges list via a CSS max-height transition, collapsing again on mouse-out/blur. Respects `prefers-reduced-motion`.
+    - **End date shown on the row**: the list row now shows a second small pill — "Ends [formatted date]" — next to the plan pill, only when `date_ended` is set (no pill shown if the subscription has no end date). Dates are reformatted client-side from the raw `YYYY-MM-DD` value into a friendlier display (e.g. "Aug 30, 2026").
+    - Not yet done: user testing of all three changes together (privileges add/edit/remove, hover-expand interaction, end-date pill display), then git commit/push.
 
 ## Completed Steps
 1. Git & GitHub setup — local repo initialized, private GitHub repo created, connected, pushed.
@@ -91,10 +99,10 @@ User wanted real CSS animations/hover transitions, which tkinter cannot do (no a
     - Confirmed filter-chip order (All → Favorites → categories alphabetically) already matched the requested ordering — no change needed there.
 
 ## Current Task
-Sidebar navigation and Subscriptions feature just built (see items 16-17 below) — awaiting user testing/confirmation before commit. **This conversation is ending here; a new conversation will continue the work.** See "Handoff Notes for New Conversation" at the very bottom of this file for exactly what to do first.
+Subscriptions UX overhaul just built (see item 18: Privileges list, hover-to-expand row, end-date pill) — awaiting user testing/confirmation before commit.
 
 ## Next Planned Step
-Immediate: test and commit the Subscriptions feature (see item 17). After that: build out the two remaining empty sidebar sections (Images & Videos, Settings — no spec discussed yet for either). Longer-term: resume the original roadmap — Testing, Error Handling, Packaging, Final Security Review, v0.1.0 Release.
+Immediate: test the full Subscriptions UX overhaul (item 18) end-to-end, clean up any test data, then git add/commit/push. After that: build out the two remaining empty sidebar sections (Images & Videos, Settings — no spec discussed yet for either). Longer-term: resume the original roadmap — Testing, Error Handling, Packaging, Final Security Review, v0.1.0 Release.
 
 ## Technology Stack
 - Language: Python 3.14.5
@@ -135,6 +143,8 @@ Immediate: test and commit the Subscriptions feature (see item 17). After that: 
 - Multiple accounts can share the same account name (e.g. two "Facebook" logins) and are grouped together in the list, distinguished by their Notes field (e.g. "Main acc" / "Alt acc").
 - Email addresses are now verified at registration via a one-time 6-digit code sent through the user's own Gmail account — this is Noctis's first and only feature requiring internet access; all other functionality (login, vault CRUD) remains fully offline.
 - GitHub repository is public (changed from private after verifying, via full Git history search, that no secrets were ever committed).
+- Subscriptions now support two parallel "extra info" mechanisms: user-labeled custom fields (Add Field, for one-off info) and a fixed, label-less Privileges bullet list (for perks) — both coexist, neither replaces the other.
+- Subscription list rows have no dedicated "View" button; the entire row is clickable/keyboard-accessible and opens the detail screen directly, with a hover/focus-triggered inline preview of privileges.
 
 ## Known Issues
 None currently.
@@ -154,6 +164,8 @@ None currently.
 - UI framework — migrated from tkinter to pywebview + HTML/CSS/JS (see item 1-13 above under Completed Steps for the full migration history and the critical `window.load_url()` freeze-bug lesson).
 - Layout — moved from a single-page vault view to a persistent sidebar with multiple sections (Accounts, Subscriptions, Images & Videos, Settings), each independently loadable.
 - Database schema (second wave) — added `subscriptions` and `subscription_fields` tables alongside the original `entries`/`categories`/`custom_fields`, for a second, differently-modeled feature (plain text, no encryption, no re-auth) within the same per-user `.db` file.
+- Database schema (third wave) — added `subscription_privileges` table alongside `subscription_fields`, giving Subscriptions two parallel "extra info" mechanisms: user-labeled custom fields (Add Field) and a fixed, label-less bullet list (Privileges).
+- Subscriptions list UX — removed the row-level "View" button in favor of making the entire row clickable/keyboard-accessible, with a hover/focus-triggered inline preview of privileges (CSS-only expand, no extra API call per hover).
 
 ---
 
@@ -165,6 +177,6 @@ This project has grown a long conversation history. To keep future sessions fast
 1. Paste this entire `PROJECT_STATUS.md` file as your first message.
 2. Optionally, also paste the current `style.css` and `vault.css` content if the first task involves visual/theme work — these are foundational and small enough to include upfront.
 3. For anything else (`vault.js`, `main.py`, `security.py`, `database.py`, `login.js`, `login.html`, `vault.html`), **do not paste them preemptively** — per this project's own "Current Code Only" rule (established early in the original conversation), Claude should ask for a file's current content before editing it, and you should just paste whatever's asked for. This avoids the new conversation growing bloated with files that aren't relevant to the immediate task.
-4. The very first real task in the new conversation should be: **test the Subscriptions feature** (add/view/edit/delete cycle), clean up test data, then `git add`/`commit`/`push`. Everything needed to do this is already built — see item 17 above.
+4. The very first real task in the new conversation should be: **test the Subscriptions UX overhaul** (Privileges add/edit/remove, hover-expand row interaction, end-date pill display), clean up test data, then `git add`/`commit`/`push`. Everything needed to do this is already built — see item 18 above.
 5. `resizable=False` and the 1200×800 fixed window size are already set in `main.py` — no need to redo this.
 6. The design system (dark theme, Inter font, SVG icon set, spacing/color tokens) is fully established in `style.css`/`vault.css` — a new session should ask to see these before making any visual changes, rather than guessing colors/spacing.
