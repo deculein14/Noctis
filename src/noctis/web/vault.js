@@ -576,6 +576,11 @@ function fadeInView(element) {
   element.classList.add("view-fade-in");
 }
 
+function formatPHP(amount) {
+  if (amount === null || amount === undefined) return null;
+  return "\u20b1" + Number(amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 // ---------- Detail (View) screen ----------
 
 const mainView = document.getElementById("main-view");
@@ -841,6 +846,8 @@ sidebarItems.forEach((item) => {
 
 // ---------- Subscriptions ----------
 
+const CURRENCY_OPTIONS = ["PHP", "USD", "EUR", "GBP", "JPY", "AUD", "CAD", "SGD", "HKD", "CNY"];
+
 let pendingSubscription = null;
 let pendingSubscriptionFields = [];
 let pendingSubscriptionPrivileges = [];
@@ -934,7 +941,7 @@ addSubscriptionButton.addEventListener("click", () => {
 });
 
 function startNewSubscriptionForm() {
-  pendingSubscription = { name: "", plan: "", date_started: "", date_ended: "" };
+  pendingSubscription = { name: "", plan: "", date_started: "", date_ended: "", amount: "", currency: "PHP" };
   pendingSubscriptionFields = [];
   pendingSubscriptionPrivileges = [];
   editingSubscriptionId = null;
@@ -959,6 +966,10 @@ function renderSubscriptionForm(focusLastPrivilege) {
     </div>
   `).join("");
 
+  const currencyOptionsHtml = CURRENCY_OPTIONS.map((code) =>
+    `<option value="${code}" ${pendingSubscription.currency === code ? "selected" : ""}>${code}</option>`
+  ).join("");
+
   openModal(`
     <p class="modal-title">${editingSubscriptionId !== null ? "Edit Subscription" : "Add Subscription"}</p>
     <div class="modal-field">
@@ -968,6 +979,13 @@ function renderSubscriptionForm(focusLastPrivilege) {
     <div class="modal-field">
       <label>Plan (e.g. Student Plan)</label>
       <input type="text" id="sub-plan" value="${escapeHtml(pendingSubscription.plan)}">
+    </div>
+    <div class="modal-field">
+      <label>Amount (optional)</label>
+      <div class="modal-field-row">
+        <input type="number" step="0.01" min="0" id="sub-amount" placeholder="e.g. 9.99" value="${escapeHtml(pendingSubscription.amount)}">
+        <select id="sub-currency">${currencyOptionsHtml}</select>
+      </div>
     </div>
     <div class="modal-field">
       <label>Date Availed</label>
@@ -1048,6 +1066,8 @@ function saveSubscriptionMainValues() {
   pendingSubscription.plan = document.getElementById("sub-plan").value;
   pendingSubscription.date_started = document.getElementById("sub-date-started").value;
   pendingSubscription.date_ended = document.getElementById("sub-date-ended").value;
+  pendingSubscription.amount = document.getElementById("sub-amount").value;
+  pendingSubscription.currency = document.getElementById("sub-currency").value;
 }
 
 function saveSubscriptionFieldValues() {
@@ -1089,6 +1109,8 @@ async function onSubscriptionSave() {
     .map((value) => value.trim())
     .filter((value) => value.length > 0);
 
+  const amountValue = pendingSubscription.amount.toString().trim();
+
   const dataToSave = {
     name: name,
     plan: pendingSubscription.plan.trim(),
@@ -1096,12 +1118,27 @@ async function onSubscriptionSave() {
     date_ended: pendingSubscription.date_ended,
     fields: pendingSubscriptionFields.slice(),
     privileges: cleanPrivileges,
+    amount: amountValue === "" ? null : amountValue,
+    currency: pendingSubscription.currency,
   };
 
+  const saveButton = document.getElementById("sub-save");
+  const originalButtonText = saveButton.textContent;
+  saveButton.disabled = true;
+  saveButton.textContent = amountValue === "" ? "Saving..." : "Converting...";
+
+  let result;
   if (editingSubscriptionId !== null) {
-    await window.pywebview.api.update_subscription(editingSubscriptionId, dataToSave);
+    result = await window.pywebview.api.update_subscription(editingSubscriptionId, dataToSave);
   } else {
-    await window.pywebview.api.save_subscription(dataToSave);
+    result = await window.pywebview.api.save_subscription(dataToSave);
+  }
+
+  if (!result.success) {
+    errorLabel.textContent = result.message;
+    saveButton.disabled = false;
+    saveButton.textContent = originalButtonText;
+    return;
   }
 
   closeSubscriptionModal();
@@ -1138,8 +1175,17 @@ async function showSubscriptionDetailView(subscriptionId) {
     `;
   }
 
+  let amountDisplay = null;
+  if (details.php_amount !== null && details.php_amount !== undefined) {
+    amountDisplay = formatPHP(details.php_amount);
+    if (details.currency && details.currency !== "PHP" && details.amount != null) {
+      amountDisplay += ` (from ${details.amount} ${details.currency})`;
+    }
+  }
+
   const coreFieldsHtml =
     subFieldRow("Plan", details.plan) +
+    subFieldRow("Amount", amountDisplay) +
     subFieldRow("Date Availed", details.date_started) +
     subFieldRow("Date Ended", details.date_ended);
 
@@ -1196,6 +1242,8 @@ async function showSubscriptionDetailView(subscriptionId) {
       plan: details.plan || "",
       date_started: details.date_started || "",
       date_ended: details.date_ended || "",
+      amount: details.amount != null ? String(details.amount) : "",
+      currency: details.currency || "PHP",
     };
     pendingSubscriptionFields = details.fields.map((f) => ({ label: f.label, value: f.value }));
     pendingSubscriptionPrivileges = (details.privileges || []).slice();
@@ -1237,7 +1285,7 @@ function getDueSubscriptions(subscriptions) {
     const days = daysUntil(sub.date_ended);
     if (days === null) return;
     if (days <= 0 || RENEWAL_THRESHOLDS.includes(days)) {
-      due.push({ id: sub.id, name: sub.name, days });
+      due.push({ id: sub.id, name: sub.name, days, phpAmount: sub.php_amount });
     }
   });
   due.sort((a, b) => a.days - b.days);
@@ -1250,12 +1298,17 @@ function renderNotificationDropdown(dueList) {
     return;
   }
 
-  notificationDropdown.innerHTML = dueList.map((item) => `
-    <div class="notification-item" data-id="${item.id}">
-      <span class="notification-item-name">${escapeHtml(item.name)}</span>
-      <span class="notification-item-days">${escapeHtml(renewalLabel(item.days))}</span>
-    </div>
-  `).join("");
+  notificationDropdown.innerHTML = dueList.map((item) => {
+    const amountPart = (item.phpAmount !== null && item.phpAmount !== undefined)
+      ? ` \u00b7 ${formatPHP(item.phpAmount)}`
+      : "";
+    return `
+      <div class="notification-item" data-id="${item.id}">
+        <span class="notification-item-name">${escapeHtml(item.name)}</span>
+        <span class="notification-item-days">${escapeHtml(renewalLabel(item.days) + amountPart)}</span>
+      </div>
+    `;
+  }).join("");
 
   notificationDropdown.querySelectorAll(".notification-item").forEach((item) => {
     item.addEventListener("click", () => {

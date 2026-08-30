@@ -1,7 +1,24 @@
+import json
 import os
+import urllib.error
+import urllib.request
+
 import webview
 
 from noctis import database, security
+
+
+def convert_to_php(amount, currency):
+    if not currency or currency.upper() == "PHP":
+        return amount
+
+    url = f"https://api.frankfurter.app/latest?amount={amount}&from={currency.upper()}&to=PHP"
+    try:
+        with urllib.request.urlopen(url, timeout=6) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+        return payload["rates"]["PHP"]
+    except (urllib.error.URLError, KeyError, ValueError, TimeoutError):
+        return None
 
 
 class Api:
@@ -202,6 +219,9 @@ class Api:
                 "plan": row["plan"],
                 "date_started": row["date_started"],
                 "date_ended": row["date_ended"],
+                "amount": row["amount"],
+                "currency": row["currency"],
+                "php_amount": row["php_amount"],
                 "privileges": [p["value"] for p in privilege_rows],
             })
         return result
@@ -225,17 +245,40 @@ class Api:
             "plan": sub["plan"],
             "date_started": sub["date_started"],
             "date_ended": sub["date_ended"],
+            "amount": sub["amount"],
+            "currency": sub["currency"],
+            "php_amount": sub["php_amount"],
             "fields": fields,
             "privileges": privileges,
         }
 
     def save_subscription(self, data):
+        amount = data.get("amount")
+        currency = data.get("currency") or None
+        php_amount = None
+
+        if amount is not None and str(amount).strip() != "":
+            try:
+                amount = float(amount)
+            except (TypeError, ValueError):
+                return {"success": False, "message": "Enter a valid amount."}
+
+            php_amount = convert_to_php(amount, currency)
+            if php_amount is None:
+                return {"success": False, "message": "Couldn't fetch the exchange rate. Check your internet connection and try again."}
+        else:
+            amount = None
+            currency = None
+
         subscription_id = database.add_subscription(
             self.current_username,
             data.get("name"),
             data.get("plan") or None,
             data.get("date_started") or None,
             data.get("date_ended") or None,
+            amount,
+            currency,
+            php_amount,
         )
         for field in data.get("fields", []):
             label = field.get("label")
@@ -250,6 +293,23 @@ class Api:
         return {"success": True, "subscription_id": subscription_id}
 
     def update_subscription(self, subscription_id, data):
+        amount = data.get("amount")
+        currency = data.get("currency") or None
+        php_amount = None
+
+        if amount is not None and str(amount).strip() != "":
+            try:
+                amount = float(amount)
+            except (TypeError, ValueError):
+                return {"success": False, "message": "Enter a valid amount."}
+
+            php_amount = convert_to_php(amount, currency)
+            if php_amount is None:
+                return {"success": False, "message": "Couldn't fetch the exchange rate. Check your internet connection and try again."}
+        else:
+            amount = None
+            currency = None
+
         database.update_subscription(
             self.current_username,
             subscription_id,
@@ -257,6 +317,9 @@ class Api:
             data.get("plan") or None,
             data.get("date_started") or None,
             data.get("date_ended") or None,
+            amount,
+            currency,
+            php_amount,
         )
         database.delete_subscription_fields(self.current_username, subscription_id)
         for field in data.get("fields", []):
