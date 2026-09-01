@@ -40,20 +40,32 @@ User wanted real CSS animations/hover transitions, which tkinter cannot do (no a
     - "Accounts" reuses all pre-existing vault functionality (list, search, categories, favorites, View screen) unchanged — just now reached via the sidebar instead of being the only page.
     - "Images & Videos" and "Settings" are still empty placeholder pages (title + "This section is coming soon") — no spec discussed yet for either.
     - Sidebar click handling in `vault.js` swaps which `.content-section` is visible and highlights the active item; each section's specific `show...MainView()` function (e.g. `showMainView()`, `showSubscriptionsMainView()`) is called on activation to (re)load that section's data fresh.
-17. ✅ DONE (built, not yet tested/committed as of end of this conversation) — Subscriptions feature, first real content in the new sidebar:
-    - New database tables (`database.py`): `subscriptions` (name, plan, date_started, date_ended, timestamps) and `subscription_fields` (arbitrary label/value pairs per subscription, e.g. benefits — stored as **plain text, not encrypted**, since subscription info isn't a secret like a password; explicit decision, differs from the Accounts encryption model).
-    - New CRUD functions: `add_subscription`, `get_all_subscriptions`, `update_subscription`, `delete_subscription`, `add_subscription_field`, `get_subscription_fields`, `delete_subscription_fields`.
-    - New `main.py` API methods: `get_subscriptions`, `get_subscription_details`, `save_subscription`, `update_subscription`, `delete_subscription` — no master-password re-authentication gating (unlike Accounts' password reveal/edit), consistent with the "not a secret" decision above.
-    - New UI in `vault.js`/`vault.html`: list view (name + plan shown per row, matching the Accounts row style), an add/edit modal with Subscription Name, Plan, Date Availed, Date Ended (native `<input type="date">` fields), plus a "+ Add Field" mechanism identical in pattern to Accounts' custom fields (for listing benefits or other arbitrary info). A detail/View screen (avatar circle, grouped fields, Edit/Delete/Back) mirrors the Accounts View screen's visual style for consistency, minus the password-specific parts.
-    - **Not yet done:** user testing of the full add/view/edit/delete cycle, cleanup of test data, git commit/push. This is the very next thing to do when work resumes.
+17. ✅ DONE — Subscriptions feature, first real content in the new sidebar:
+    - Database tables (`database.py`): `subscriptions` (name, plan, date_started, date_ended, timestamps) and `subscription_fields` (arbitrary label/value pairs per subscription, e.g. benefits — stored as **plain text, not encrypted**, since subscription info isn't a secret like a password; explicit decision, differs from the Accounts encryption model).
+    - CRUD functions: `add_subscription`, `get_all_subscriptions`, `update_subscription`, `delete_subscription`, `add_subscription_field`, `get_subscription_fields`, `delete_subscription_fields`.
+    - `main.py` API methods: `get_subscriptions`, `get_subscription_details`, `save_subscription`, `update_subscription`, `delete_subscription` — no master-password re-authentication gating (unlike Accounts' password reveal/edit), consistent with the "not a secret" decision above.
+    - UI in `vault.js`/`vault.html`: list view (name + plan per row, matching the Accounts row style), an add/edit modal with Subscription Name, Plan, Date Availed, Date Ended (native `<input type="date">` fields), plus a "+ Add Field" mechanism identical in pattern to Accounts' custom fields. A detail/View screen (avatar circle, grouped fields, Edit/Delete/Back) mirrors the Accounts View screen's visual style, minus the password-specific parts.
 18. ✅ DONE — Subscriptions UX overhaul, three linked changes:
-    - **Privileges list**: replaced the idea of a free-form "Add Field" as the only option for subscription perks with a dedicated, always-visible **Privileges** section (e.g. "No ads", "Better quality") — a plain growing list of text items, no label required, with its own "+ Add Privilege" and per-item remove button. The original "+ Add Field" (custom label/value pairs) was kept as-is for one-off fields, per explicit decision — Privileges is additive, not a replacement.
-      - New table `subscription_privileges` (id, subscription_id, value) in `database.py`, following the same pattern as `subscription_fields` but without a label column. New functions: `add_subscription_privilege`, `get_subscription_privileges`, `delete_subscription_privileges`.
-      - `main.py`: `save_subscription`/`update_subscription` now write privileges (clear-and-reinsert pattern, same as fields on update); `get_subscription_details` and `get_subscriptions` both return a `privileges` list.
-      - View screen shows Privileges as a bullet list under its own section label.
-    - **Hover-to-expand row, no separate View button**: subscription list rows no longer have a "View" button — the entire row is clickable (and keyboard-accessible: focusable, Enter/Space triggers it) and goes straight to the existing detail/View screen (which already has Edit built in, unchanged). Hovering (or keyboard-focusing) a row smoothly expands it in place to preview that subscription's privileges list via a CSS max-height transition, collapsing again on mouse-out/blur. Respects `prefers-reduced-motion`.
-    - **End date shown on the row**: the list row now shows a second small pill — "Ends [formatted date]" — next to the plan pill, only when `date_ended` is set (no pill shown if the subscription has no end date). Dates are reformatted client-side from the raw `YYYY-MM-DD` value into a friendlier display (e.g. "Aug 30, 2026").
-    - Not yet done: user testing of all three changes together (privileges add/edit/remove, hover-expand interaction, end-date pill display), then git commit/push.
+    - **Privileges list**: added a dedicated, always-visible **Privileges** section (e.g. "No ads", "Better quality") — a plain growing list of text items, no label required, with its own "+ Add Privilege" and per-item remove button. The original "+ Add Field" (custom label/value pairs) was kept as-is for one-off fields — Privileges is additive, not a replacement. New table `subscription_privileges` (id, subscription_id, value); new functions `add_subscription_privilege`, `get_subscription_privileges`, `delete_subscription_privileges`. View screen shows Privileges as a bullet list under its own section label.
+    - **Hover-to-expand row, no separate View button**: subscription list rows no longer have a "View" button — the entire row is clickable (and keyboard-accessible: focusable, Enter/Space triggers it) and goes straight to the detail/View screen (Edit lives inside it, same pattern as Accounts). Hovering (or keyboard-focusing) a row smoothly expands it in place to preview that subscription's privileges list via a CSS max-height transition. Respects `prefers-reduced-motion`.
+    - **End date shown on the row**: the list row shows a second small pill — "Ends [formatted date]" — next to the plan pill, only when `date_ended` is set.
+19. ✅ DONE — Notification bell for upcoming renewals:
+    - A bell icon is **fixed to the top-right corner of the entire window** (`position: fixed`, independent of the sidebar), visible from every section including Accounts — not just Subscriptions.
+    - Shows a red dot when any subscription's `date_ended` is exactly 30, 7, 3, or 1 day(s) away, or already due/overdue (≤0 days) — computed client-side in `vault.js` from data already returned by `get_subscriptions` (no new backend calls needed).
+    - Clicking the bell opens a dropdown listing each due subscription with a countdown label (e.g. "ends in 3 days", "overdue by 2d"); clicking an item switches the sidebar to Subscriptions and opens that subscription's detail view directly (`activateSection()` helper added to share this logic between sidebar clicks and notification clicks).
+    - Dropdown/dot refresh automatically after any subscription save, update, or delete (`refreshNotifications()` called at the end of those flows) and on initial app load.
+    - **Bug fixed — content cut off when jumping via notification:** clicking a notification (or switching sidebar sections generally) could open a view with horizontal scroll already offset, clipping the left edge of text (e.g. "Spotify" showing as "potify"). Fixed with two changes: (1) `overflow-x: hidden` added to `html`, `body`, and `.content-area` to prevent the page from ever scrolling sideways in the first place; (2) a new `resetScroll()` helper forces horizontal scroll back to 0 on every view transition (main view, detail view, group list, subscriptions, section switches) as a belt-and-suspenders fix.
+    - **Bell placement iterated twice:** first tried inside the sidebar next to the "Noctis" brand text (too cramped, sidebar too narrow), then moved to a `position: fixed` element anchored to the browser window's top-right corner — fully independent of sidebar width, doesn't clip regardless of window/sidebar size.
+20. ✅ DONE — Subscription amount in PHP (peso):
+    - **Design decision:** originally explored live currency conversion (any currency → PHP via the Frankfurter API, matching the "only email verification touches the internet" pattern), but this was reverted after connectivity issues fetching the rate. Final approach: **amount is entered and stored directly in PHP**, no currency selection, no internet dependency, no separate "converted from" note.
+    - `subscriptions` table gained an `amount` column (`REAL`) in `database.py`, added via `ALTER TABLE ... ADD COLUMN` wrapped in try/except (safe to run repeatedly, so old databases upgrade automatically on next login). Leftover `currency`/`php_amount` columns from the abandoned live-conversion attempt may still exist in the schema from that intermediate step but are unused — harmless.
+    - `add_subscription`/`update_subscription` (`database.py`) and `save_subscription`/`update_subscription` (`main.py`) now accept/store a plain `amount` float; no `convert_to_php`/`urllib` code remains in `main.py`.
+    - Add/Edit Subscription form (`vault.js`) has an **Amount (₱, optional)** field — deliberately `type="text" inputmode="decimal"` rather than `type="number"`, specifically to avoid the browser's default increment/decrement spinner arrows, with a live JS input filter restricting entry to digits and a single decimal point.
+    - Amount now displays in **three places** for at-a-glance visibility without opening the full View screen:
+      1. On the subscription **list row** itself, as a third pill (green/success-colored via new `.subscription-amount-pill` CSS class) after the plan and end-date pills — e.g. "Spotify Premium · Ends Sep 30, 2026 · ₱149.00".
+      2. In the full **View screen**, as an "Amount" field row (₱-formatted) alongside Plan/Date Availed/Date Ended.
+      3. In the **notification dropdown**, appended after the countdown label (e.g. "ends in 3 days · ₱149.00") so the amount due is visible without navigating to the Subscriptions page at all.
+    - New `formatPHP(amount)` helper in `vault.js` (₱ symbol + thousands separator + 2 decimal places) used consistently across all three display locations.
 
 ## Completed Steps
 1. Git & GitHub setup — local repo initialized, private GitHub repo created, connected, pushed.
@@ -99,10 +111,10 @@ User wanted real CSS animations/hover transitions, which tkinter cannot do (no a
     - Confirmed filter-chip order (All → Favorites → categories alphabetically) already matched the requested ordering — no change needed there.
 
 ## Current Task
-Subscriptions UX overhaul just built (see item 18: Privileges list, hover-to-expand row, end-date pill) — awaiting user testing/confirmation before commit.
+Subscriptions feature (Privileges, hover-expand row, end date, notification bell, PHP amount) is fully built across items 17-20. **None of this has been tested or committed to Git yet.** This conversation is ending here; a new conversation will continue.
 
 ## Next Planned Step
-Immediate: test the full Subscriptions UX overhaul (item 18) end-to-end, clean up any test data, then git add/commit/push. After that: build out the two remaining empty sidebar sections (Images & Videos, Settings — no spec discussed yet for either). Longer-term: resume the original roadmap — Testing, Error Handling, Packaging, Final Security Review, v0.1.0 Release.
+Immediate: test the complete Subscriptions feature end-to-end (add/edit/view/delete a subscription with plan, dates, amount, privileges, and custom fields; confirm the notification bell fires correctly at 30/7/3/1 days and shows the right amount; confirm no horizontal scroll/cutoff issues), clean up any test data, then `git add`/`commit`/`push`. After that: build out the two remaining empty sidebar sections (Images & Videos, Settings — no spec discussed yet for either). Longer-term: resume the original roadmap — Testing, Error Handling, Packaging, Final Security Review, v0.1.0 Release.
 
 ## Technology Stack
 - Language: Python 3.14.5
@@ -110,7 +122,7 @@ Immediate: test the full Subscriptions UX overhaul (item 18) end-to-end, clean u
 - Local storage: SQLite (built-in `sqlite3`), one database file per user account
 - Encryption: `cryptography` library (PBKDF2HMAC + Fernet/AES)
 - Packaging (planned, Step 19 of original numbering): PyInstaller
-- Explicitly local-only/offline by design — no cloud backend
+- Explicitly local-only/offline by design — no cloud backend. (Live currency conversion via an external API was tried and reverted for Subscriptions amounts — see item 20 — reinforcing this design principle rather than breaking it.)
 
 ## Installed Dependencies (requirements.txt)
 - cryptography==50.0.0
@@ -143,11 +155,13 @@ Immediate: test the full Subscriptions UX overhaul (item 18) end-to-end, clean u
 - Multiple accounts can share the same account name (e.g. two "Facebook" logins) and are grouped together in the list, distinguished by their Notes field (e.g. "Main acc" / "Alt acc").
 - Email addresses are now verified at registration via a one-time 6-digit code sent through the user's own Gmail account — this is Noctis's first and only feature requiring internet access; all other functionality (login, vault CRUD) remains fully offline.
 - GitHub repository is public (changed from private after verifying, via full Git history search, that no secrets were ever committed).
-- Subscriptions now support two parallel "extra info" mechanisms: user-labeled custom fields (Add Field, for one-off info) and a fixed, label-less Privileges bullet list (for perks) — both coexist, neither replaces the other.
+- Subscriptions support two parallel "extra info" mechanisms: user-labeled custom fields (Add Field, for one-off info) and a fixed, label-less Privileges bullet list (for perks) — both coexist, neither replaces the other.
 - Subscription list rows have no dedicated "View" button; the entire row is clickable/keyboard-accessible and opens the detail screen directly, with a hover/focus-triggered inline preview of privileges.
+- Subscription amounts are entered and stored directly in PHP (peso) — no currency selection, no live conversion, reaffirming the offline-first principle after a live-conversion attempt was tried and reverted.
+- The renewal notification bell is a fixed, window-level UI element (not scoped to the Subscriptions sidebar section) so upcoming renewals are visible from anywhere in the app.
 
 ## Known Issues
-None currently.
+None currently. (The horizontal-scroll/content-cutoff bug from notification navigation, described under item 19, has been fixed — flagged here as resolved, not outstanding.)
 
 ## Important Unfinished Work
 - Planned future enhancement (not yet scheduled to a specific step): email alert to a Gmail address after 5 failed master-password attempts. Now technically easier since Gmail-sending infrastructure (`smtplib` + App Password) already exists from the email verification feature — could reuse `security.py`'s email-sending pattern.
@@ -156,6 +170,7 @@ None currently.
 - `config.DATABASE_FILENAME` in `config.py` is unused (superseded by per-user filenames) — harmless leftover.
 - Edit mode for existing accounts uses a single combined screen (fields + category together) rather than the two-step wizard used for creation — an intentional simplification, not a bug.
 - If a user abandons registration after requesting a code but before entering it, that pending verification sits in `pending_verifications.json` until its 10-minute expiry — harmless (never becomes an account, file is git-ignored) but not actively cleaned up early.
+- Leftover unused `currency`/`php_amount` columns in the `subscriptions` table from the abandoned live-currency-conversion attempt (item 20) — harmless, not actively cleaned up.
 
 ## Architecture Changes
 - Multi-User Login/Vaults — changed from a single global vault to per-username accounts with isolated storage (salt, verification token, lockout state, database file per user).
@@ -166,6 +181,9 @@ None currently.
 - Database schema (second wave) — added `subscriptions` and `subscription_fields` tables alongside the original `entries`/`categories`/`custom_fields`, for a second, differently-modeled feature (plain text, no encryption, no re-auth) within the same per-user `.db` file.
 - Database schema (third wave) — added `subscription_privileges` table alongside `subscription_fields`, giving Subscriptions two parallel "extra info" mechanisms: user-labeled custom fields (Add Field) and a fixed, label-less bullet list (Privileges).
 - Subscriptions list UX — removed the row-level "View" button in favor of making the entire row clickable/keyboard-accessible, with a hover/focus-triggered inline preview of privileges (CSS-only expand, no extra API call per hover).
+- Global notification system — introduced a window-level (not section-scoped) renewal-reminder bell, computed entirely client-side from existing `get_subscriptions` data; added a shared `activateSection()` helper so both sidebar clicks and notification clicks route through the same section-switching logic.
+- Layout robustness — added global `overflow-x: hidden` and a `resetScroll()` helper invoked on every view transition, to prevent horizontal-scroll content clipping across the whole app, not just the Subscriptions section.
+- Database schema (fourth wave) — added an `amount` column (`REAL`) to `subscriptions` for direct PHP entry; a prior attempt added `currency`/`php_amount` columns for live conversion, which were left in place but are now unused after that approach was reverted.
 
 ---
 
@@ -177,6 +195,7 @@ This project has grown a long conversation history. To keep future sessions fast
 1. Paste this entire `PROJECT_STATUS.md` file as your first message.
 2. Optionally, also paste the current `style.css` and `vault.css` content if the first task involves visual/theme work — these are foundational and small enough to include upfront.
 3. For anything else (`vault.js`, `main.py`, `security.py`, `database.py`, `login.js`, `login.html`, `vault.html`), **do not paste them preemptively** — per this project's own "Current Code Only" rule (established early in the original conversation), Claude should ask for a file's current content before editing it, and you should just paste whatever's asked for. This avoids the new conversation growing bloated with files that aren't relevant to the immediate task.
-4. The very first real task in the new conversation should be: **test the Subscriptions UX overhaul** (Privileges add/edit/remove, hover-expand row interaction, end-date pill display), clean up test data, then `git add`/`commit`/`push`. Everything needed to do this is already built — see item 18 above.
+4. The very first real task in the new conversation should be: **test the complete Subscriptions feature** (add/edit/view/delete cycle including Privileges, custom fields, PHP amount, and the notification bell's 30/7/3/1-day triggers), clean up test data, then `git add`/`commit`/`push`. Everything needed to do this is already built — see items 17-20 above.
 5. `resizable=False` and the 1200×800 fixed window size are already set in `main.py` — no need to redo this.
 6. The design system (dark theme, Inter font, SVG icon set, spacing/color tokens) is fully established in `style.css`/`vault.css` — a new session should ask to see these before making any visual changes, rather than guessing colors/spacing.
+7. The notification bell is `position: fixed` at the top-right of the whole window (not inside the sidebar) — if any future layout change touches the sidebar or header, keep this in mind so the bell isn't accidentally reparented back into a cramped container.
