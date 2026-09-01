@@ -577,7 +577,7 @@ function fadeInView(element) {
 }
 
 function formatPHP(amount) {
-  if (amount === null || amount === undefined) return null;
+  if (amount === null || amount === undefined || amount === "") return null;
   return "\u20b1" + Number(amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
@@ -846,8 +846,6 @@ sidebarItems.forEach((item) => {
 
 // ---------- Subscriptions ----------
 
-const CURRENCY_OPTIONS = ["PHP", "USD", "EUR", "GBP", "JPY", "AUD", "CAD", "SGD", "HKD", "CNY"];
-
 let pendingSubscription = null;
 let pendingSubscriptionFields = [];
 let pendingSubscriptionPrivileges = [];
@@ -908,6 +906,11 @@ function buildSubscriptionRow(sub) {
     ? `<p class="subscription-end-pill">Ends ${escapeHtml(formattedEndDate)}</p>`
     : "";
 
+  const formattedAmount = formatPHP(sub.amount);
+  const amountPillHtml = formattedAmount
+    ? `<p class="subscription-amount-pill">${escapeHtml(formattedAmount)}</p>`
+    : "";
+
   const previewHtml = privileges.length > 0
     ? `<ul>${privileges.map((p) => `<li>${escapeHtml(p)}</li>`).join("")}</ul>`
     : `<p class="subscription-privileges-empty">No privileges listed yet.</p>`;
@@ -918,6 +921,7 @@ function buildSubscriptionRow(sub) {
         <h3>${escapeHtml(sub.name)}</h3>
         ${planPillHtml}
         ${endDatePillHtml}
+        ${amountPillHtml}
       </div>
     </div>
     <div class="subscription-privileges-preview">${previewHtml}</div>
@@ -941,7 +945,7 @@ addSubscriptionButton.addEventListener("click", () => {
 });
 
 function startNewSubscriptionForm() {
-  pendingSubscription = { name: "", plan: "", date_started: "", date_ended: "", amount: "", currency: "PHP" };
+  pendingSubscription = { name: "", plan: "", date_started: "", date_ended: "", amount: "" };
   pendingSubscriptionFields = [];
   pendingSubscriptionPrivileges = [];
   editingSubscriptionId = null;
@@ -966,10 +970,6 @@ function renderSubscriptionForm(focusLastPrivilege) {
     </div>
   `).join("");
 
-  const currencyOptionsHtml = CURRENCY_OPTIONS.map((code) =>
-    `<option value="${code}" ${pendingSubscription.currency === code ? "selected" : ""}>${code}</option>`
-  ).join("");
-
   openModal(`
     <p class="modal-title">${editingSubscriptionId !== null ? "Edit Subscription" : "Add Subscription"}</p>
     <div class="modal-field">
@@ -981,11 +981,8 @@ function renderSubscriptionForm(focusLastPrivilege) {
       <input type="text" id="sub-plan" value="${escapeHtml(pendingSubscription.plan)}">
     </div>
     <div class="modal-field">
-      <label>Amount (optional)</label>
-      <div class="modal-field-row">
-        <input type="number" step="0.01" min="0" id="sub-amount" placeholder="e.g. 9.99" value="${escapeHtml(pendingSubscription.amount)}">
-        <select id="sub-currency">${currencyOptionsHtml}</select>
-      </div>
+      <label>Amount (\u20b1, optional)</label>
+      <input type="text" inputmode="decimal" id="sub-amount" placeholder="e.g. 149.00" value="${escapeHtml(pendingSubscription.amount)}">
     </div>
     <div class="modal-field">
       <label>Date Availed</label>
@@ -1010,6 +1007,16 @@ function renderSubscriptionForm(focusLastPrivilege) {
       <button class="modal-primary" id="sub-save">Save</button>
     </div>
   `);
+
+  const amountInput = document.getElementById("sub-amount");
+  amountInput.addEventListener("input", () => {
+    let cleaned = amountInput.value.replace(/[^0-9.]/g, "");
+    const firstDot = cleaned.indexOf(".");
+    if (firstDot !== -1) {
+      cleaned = cleaned.slice(0, firstDot + 1) + cleaned.slice(firstDot + 1).replace(/\./g, "");
+    }
+    amountInput.value = cleaned;
+  });
 
   document.getElementById("sub-add-field-button").addEventListener("click", () => {
     const label = prompt("Field Name (e.g. Renewal Date)");
@@ -1067,7 +1074,6 @@ function saveSubscriptionMainValues() {
   pendingSubscription.date_started = document.getElementById("sub-date-started").value;
   pendingSubscription.date_ended = document.getElementById("sub-date-ended").value;
   pendingSubscription.amount = document.getElementById("sub-amount").value;
-  pendingSubscription.currency = document.getElementById("sub-currency").value;
 }
 
 function saveSubscriptionFieldValues() {
@@ -1119,13 +1125,7 @@ async function onSubscriptionSave() {
     fields: pendingSubscriptionFields.slice(),
     privileges: cleanPrivileges,
     amount: amountValue === "" ? null : amountValue,
-    currency: pendingSubscription.currency,
   };
-
-  const saveButton = document.getElementById("sub-save");
-  const originalButtonText = saveButton.textContent;
-  saveButton.disabled = true;
-  saveButton.textContent = amountValue === "" ? "Saving..." : "Converting...";
 
   let result;
   if (editingSubscriptionId !== null) {
@@ -1136,8 +1136,6 @@ async function onSubscriptionSave() {
 
   if (!result.success) {
     errorLabel.textContent = result.message;
-    saveButton.disabled = false;
-    saveButton.textContent = originalButtonText;
     return;
   }
 
@@ -1175,17 +1173,9 @@ async function showSubscriptionDetailView(subscriptionId) {
     `;
   }
 
-  let amountDisplay = null;
-  if (details.php_amount !== null && details.php_amount !== undefined) {
-    amountDisplay = formatPHP(details.php_amount);
-    if (details.currency && details.currency !== "PHP" && details.amount != null) {
-      amountDisplay += ` (from ${details.amount} ${details.currency})`;
-    }
-  }
-
   const coreFieldsHtml =
     subFieldRow("Plan", details.plan) +
-    subFieldRow("Amount", amountDisplay) +
+    subFieldRow("Amount", formatPHP(details.amount)) +
     subFieldRow("Date Availed", details.date_started) +
     subFieldRow("Date Ended", details.date_ended);
 
@@ -1243,7 +1233,6 @@ async function showSubscriptionDetailView(subscriptionId) {
       date_started: details.date_started || "",
       date_ended: details.date_ended || "",
       amount: details.amount != null ? String(details.amount) : "",
-      currency: details.currency || "PHP",
     };
     pendingSubscriptionFields = details.fields.map((f) => ({ label: f.label, value: f.value }));
     pendingSubscriptionPrivileges = (details.privileges || []).slice();
@@ -1285,7 +1274,7 @@ function getDueSubscriptions(subscriptions) {
     const days = daysUntil(sub.date_ended);
     if (days === null) return;
     if (days <= 0 || RENEWAL_THRESHOLDS.includes(days)) {
-      due.push({ id: sub.id, name: sub.name, days, phpAmount: sub.php_amount });
+      due.push({ id: sub.id, name: sub.name, days, amount: sub.amount });
     }
   });
   due.sort((a, b) => a.days - b.days);
@@ -1299,13 +1288,12 @@ function renderNotificationDropdown(dueList) {
   }
 
   notificationDropdown.innerHTML = dueList.map((item) => {
-    const amountPart = (item.phpAmount !== null && item.phpAmount !== undefined)
-      ? ` \u00b7 ${formatPHP(item.phpAmount)}`
-      : "";
+    const amountPart = formatPHP(item.amount);
+    const suffix = amountPart ? ` \u00b7 ${amountPart}` : "";
     return `
       <div class="notification-item" data-id="${item.id}">
         <span class="notification-item-name">${escapeHtml(item.name)}</span>
-        <span class="notification-item-days">${escapeHtml(renewalLabel(item.days) + amountPart)}</span>
+        <span class="notification-item-days">${escapeHtml(renewalLabel(item.days) + suffix)}</span>
       </div>
     `;
   }).join("");

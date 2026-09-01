@@ -74,18 +74,16 @@ def initialize_database(username):
         )
     """)
 
-    try:
-        cursor.execute("ALTER TABLE subscriptions ADD COLUMN amount REAL")
-    except sqlite3.OperationalError:
-        pass
-    try:
-        cursor.execute("ALTER TABLE subscriptions ADD COLUMN currency TEXT")
-    except sqlite3.OperationalError:
-        pass
-    try:
-        cursor.execute("ALTER TABLE subscriptions ADD COLUMN php_amount REAL")
-    except sqlite3.OperationalError:
-        pass
+    # Older versions may already have amount/currency/php_amount columns from a
+    # previous attempt at live currency conversion. We only actively use
+    # "amount" now (a direct peso value); the other two are left in place if
+    # present but are otherwise unused.
+    for column_def in ("amount REAL", "currency TEXT", "php_amount REAL"):
+        column_name = column_def.split()[0]
+        try:
+            cursor.execute(f"ALTER TABLE subscriptions ADD COLUMN {column_def}")
+        except sqlite3.OperationalError:
+            pass
 
     connection.commit()
     connection.close()
@@ -190,15 +188,14 @@ def toggle_favorite(username, entry_id, is_favorite):
     connection.close()
 
 
-def add_subscription(username, name, plan=None, date_started=None, date_ended=None,
-                      amount=None, currency=None, php_amount=None):
+def add_subscription(username, name, plan=None, date_started=None, date_ended=None, amount=None):
     connection = get_connection(username)
     cursor = connection.cursor()
     now = datetime.now(timezone.utc).isoformat()
     cursor.execute("""
-        INSERT INTO subscriptions (name, plan, date_started, date_ended, amount, currency, php_amount, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (name, plan, date_started, date_ended, amount, currency, php_amount, now, now))
+        INSERT INTO subscriptions (name, plan, date_started, date_ended, amount, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (name, plan, date_started, date_ended, amount, now, now))
     connection.commit()
     new_id = cursor.lastrowid
     connection.close()
@@ -214,16 +211,15 @@ def get_all_subscriptions(username):
     return rows
 
 
-def update_subscription(username, subscription_id, name, plan=None, date_started=None, date_ended=None,
-                         amount=None, currency=None, php_amount=None):
+def update_subscription(username, subscription_id, name, plan=None, date_started=None, date_ended=None, amount=None):
     connection = get_connection(username)
     cursor = connection.cursor()
     now = datetime.now(timezone.utc).isoformat()
     cursor.execute("""
         UPDATE subscriptions
-        SET name = ?, plan = ?, date_started = ?, date_ended = ?, amount = ?, currency = ?, php_amount = ?, updated_at = ?
+        SET name = ?, plan = ?, date_started = ?, date_ended = ?, amount = ?, updated_at = ?
         WHERE id = ?
-    """, (name, plan, date_started, date_ended, amount, currency, php_amount, now, subscription_id))
+    """, (name, plan, date_started, date_ended, amount, now, subscription_id))
     connection.commit()
     connection.close()
 

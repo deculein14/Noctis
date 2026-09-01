@@ -977,3 +977,8 @@ html, body {
 * {
   box-sizing: border-box;
 }
+
+.subscription-amount-pill {
+  color: var(--color-success);
+  font-weight: 700;
+}
