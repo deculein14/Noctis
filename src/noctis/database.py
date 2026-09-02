@@ -73,6 +73,15 @@ def initialize_database(username):
             FOREIGN KEY (subscription_id) REFERENCES subscriptions (id) ON DELETE CASCADE
         )
     """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS folders (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            description TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+    """)
 
     # Older versions may already have amount/currency/php_amount columns from a
     # previous attempt at live currency conversion. We only actively use
@@ -312,5 +321,49 @@ def delete_custom_fields_for_entry(username, entry_id):
     connection = get_connection(username)
     cursor = connection.cursor()
     cursor.execute("DELETE FROM custom_fields WHERE entry_id = ?", (entry_id,))
+    connection.commit()
+    connection.close()
+
+
+def add_folder(username, name, description=None):
+    connection = get_connection(username)
+    cursor = connection.cursor()
+    now = datetime.now(timezone.utc).isoformat()
+    cursor.execute("""
+        INSERT INTO folders (name, description, created_at, updated_at)
+        VALUES (?, ?, ?, ?)
+    """, (name, description, now, now))
+    connection.commit()
+    new_id = cursor.lastrowid
+    connection.close()
+    return new_id
+
+
+def get_all_folders(username):
+    connection = get_connection(username)
+    cursor = connection.cursor()
+    cursor.execute("SELECT * FROM folders ORDER BY name")
+    rows = cursor.fetchall()
+    connection.close()
+    return rows
+
+
+def update_folder(username, folder_id, name, description=None):
+    connection = get_connection(username)
+    cursor = connection.cursor()
+    now = datetime.now(timezone.utc).isoformat()
+    cursor.execute("""
+        UPDATE folders
+        SET name = ?, description = ?, updated_at = ?
+        WHERE id = ?
+    """, (name, description, now, folder_id))
+    connection.commit()
+    connection.close()
+
+
+def delete_folder(username, folder_id):
+    connection = get_connection(username)
+    cursor = connection.cursor()
+    cursor.execute("DELETE FROM folders WHERE id = ?", (folder_id,))
     connection.commit()
     connection.close()

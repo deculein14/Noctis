@@ -298,6 +298,64 @@ class Api:
         database.delete_subscription(self.current_username, subscription_id)
         return {"success": True}
 
+    # ---------- Folders (Images & Videos) ----------
+
+    def get_folders(self):
+        rows = database.get_all_folders(self.current_username)
+        return [
+            {
+                "id": row["id"],
+                "name": row["name"],
+                "description": row["description"],
+            }
+            for row in rows
+        ]
+
+    def save_folder(self, data):
+        name = (data.get("name") or "").strip()
+        if not name:
+            return {"success": False, "message": "Folder name is required."}
+
+        folder_id = database.add_folder(
+            self.current_username,
+            name,
+            data.get("description") or None,
+        )
+        return {"success": True, "folder_id": folder_id}
+
+    def update_folder(self, folder_id, data):
+        name = (data.get("name") or "").strip()
+        if not name:
+            return {"success": False, "message": "Folder name is required."}
+
+        database.update_folder(
+            self.current_username,
+            folder_id,
+            name,
+            data.get("description") or None,
+        )
+        return {"success": True}
+
+    def delete_folder(self, folder_id):
+        database.delete_folder(self.current_username, folder_id)
+        return {"success": True}
+
+    def open_folder(self, folder_id, master_password):
+        if not security.check_master_password(self.current_username, master_password):
+            return {"success": False, "message": "Incorrect master password."}
+
+        rows = database.get_all_folders(self.current_username)
+        folder = next((row for row in rows if row["id"] == folder_id), None)
+        if folder is None:
+            return {"success": False, "message": "Folder not found."}
+
+        return {
+            "success": True,
+            "id": folder["id"],
+            "name": folder["name"],
+            "description": folder["description"],
+        }
+
 
 def get_web_path(filename):
     base_dir = os.path.dirname(os.path.abspath(__file__))
