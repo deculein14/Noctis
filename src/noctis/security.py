@@ -187,6 +187,14 @@ def get_database_filename(username: str) -> str:
     return f"vault_{safe_name}.db"
 
 
+def get_media_directory(username: str) -> str:
+    """Per-user root folder where inserted images/videos are permanently
+    stored (files are moved here, not copied - see main.py's insert_media_file)."""
+    username = _normalize_username(username)
+    safe_name = "".join(c if c.isalnum() else "_" for c in username)
+    return f"media_{safe_name}"
+
+
 class VaultSession:
     def __init__(self):
         self._key = None

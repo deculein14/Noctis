@@ -82,6 +82,17 @@ def initialize_database(username):
             updated_at TEXT NOT NULL
         )
     """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS folder_files (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            folder_id INTEGER NOT NULL,
+            original_filename TEXT NOT NULL,
+            stored_filename TEXT NOT NULL,
+            file_type TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (folder_id) REFERENCES folders (id) ON DELETE CASCADE
+        )
+    """)
 
     # Older versions may already have amount/currency/php_amount columns from a
     # previous attempt at live currency conversion. We only actively use
@@ -365,5 +376,36 @@ def delete_folder(username, folder_id):
     connection = get_connection(username)
     cursor = connection.cursor()
     cursor.execute("DELETE FROM folders WHERE id = ?", (folder_id,))
+    connection.commit()
+    connection.close()
+
+
+def add_folder_file(username, folder_id, original_filename, stored_filename, file_type):
+    connection = get_connection(username)
+    cursor = connection.cursor()
+    now = datetime.now(timezone.utc).isoformat()
+    cursor.execute("""
+        INSERT INTO folder_files (folder_id, original_filename, stored_filename, file_type, created_at)
+        VALUES (?, ?, ?, ?, ?)
+    """, (folder_id, original_filename, stored_filename, file_type, now))
+    connection.commit()
+    new_id = cursor.lastrowid
+    connection.close()
+    return new_id
+
+
+def get_folder_files(username, folder_id):
+    connection = get_connection(username)
+    cursor = connection.cursor()
+    cursor.execute("SELECT * FROM folder_files WHERE folder_id = ? ORDER BY id", (folder_id,))
+    rows = cursor.fetchall()
+    connection.close()
+    return rows
+
+
+def delete_folder_files(username, folder_id):
+    connection = get_connection(username)
+    cursor = connection.cursor()
+    cursor.execute("DELETE FROM folder_files WHERE folder_id = ?", (folder_id,))
     connection.commit()
     connection.close()

@@ -1249,6 +1249,7 @@ async function showSubscriptionDetailView(subscriptionId) {
 
 let pendingFolder = null;
 let editingFolderId = null;
+let currentOpenFolderId = null;
 
 const mediaMainView = document.getElementById("media-main-view");
 const folderDetailView = document.getElementById("folder-detail-view");
@@ -1350,7 +1351,7 @@ function showFolderContextMenu(x, y, folder) {
   deleteOption.addEventListener("mouseleave", () => deleteOption.style.background = "transparent");
   deleteOption.addEventListener("click", async () => {
     menu.remove();
-    const confirmed = confirm(`Delete folder "${folder.name}"? This cannot be undone.`);
+    const confirmed = confirm(`Delete folder "${folder.name}"? This will also delete everything inside it. This cannot be undone.`);
     if (confirmed) {
       await window.pywebview.api.delete_folder(folder.id);
       loadFolders();
@@ -1456,6 +1457,8 @@ async function openFolder(folder) {
 }
 
 function showFolderDetailView(folder) {
+  currentOpenFolderId = folder.id;
+
   mediaMainView.style.display = "none";
   folderDetailView.style.display = "block";
   fadeInView(folderDetailView);
@@ -1481,8 +1484,12 @@ function showFolderDetailView(folder) {
         </div>
       ` : ""}
 
+      <div class="detail-secondary-row" style="justify-content:flex-end;">
+        <button type="button" class="modal-primary" id="insert-media-btn">+ Insert</button>
+      </div>
+
       <div class="detail-section-label">Contents</div>
-      <p class="empty-state">No images or videos yet. File storage is coming in a future step.</p>
+      <div id="media-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(140px, 1fr)); gap:12px;"></div>
 
       <div class="detail-button-row">
         <button class="modal-secondary" id="folder-back-btn">Back</button>
@@ -1491,6 +1498,84 @@ function showFolderDetailView(folder) {
   `;
 
   document.getElementById("folder-back-btn").addEventListener("click", showMediaMainView);
+  document.getElementById("insert-media-btn").addEventListener("click", onInsertMedia);
+
+  loadFolderFiles(folder.id);
+}
+
+async function loadFolderFiles(folderId) {
+  const files = await window.pywebview.api.get_folder_files(folderId);
+  const grid = document.getElementById("media-grid");
+  if (!grid) return;
+
+  grid.innerHTML = "";
+
+  if (files.length === 0) {
+    grid.innerHTML = `<p class="empty-state" style="grid-column:1/-1;">No images or videos yet. Click "+ Insert" to add one.</p>`;
+    return;
+  }
+
+  files.forEach((file) => {
+    grid.appendChild(buildMediaThumbnail(file));
+  });
+}
+
+function buildMediaThumbnail(file) {
+  const thumb = document.createElement("div");
+  thumb.style.cssText = `
+    aspect-ratio: 1 / 1;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #1A1D24;
+    border: 1px solid #2A2E38;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    cursor: pointer;
+  `;
+  thumb.title = file.original_filename;
+
+  if (file.file_type === "image") {
+    thumb.innerHTML = `<img src="${file.url}" alt="${escapeHtml(file.original_filename)}" style="width:100%; height:100%; object-fit:cover;">`;
+  } else {
+    thumb.innerHTML = `
+      <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:36px; height:36px; color:#9096A2;">
+        <polygon points="23 7 16 12 23 17 23 7"/>
+        <rect x="1" y="5" width="15" height="14" rx="2"/>
+      </svg>
+    `;
+  }
+
+  thumb.addEventListener("click", () => showMediaViewer(file));
+  return thumb;
+}
+
+function showMediaViewer(file) {
+  const contentHtml = file.file_type === "image"
+    ? `<img src="${file.url}" alt="${escapeHtml(file.original_filename)}" style="max-width:100%; max-height:70vh; display:block; margin:0 auto; border-radius:8px;">`
+    : `<video src="${file.url}" controls autoplay style="max-width:100%; max-height:70vh; display:block; margin:0 auto; border-radius:8px;"></video>`;
+
+  openModal(`
+    <p class="modal-title">${escapeHtml(file.original_filename)}</p>
+    ${contentHtml}
+    <div class="modal-button-row">
+      <button class="modal-secondary" id="media-viewer-close">Close</button>
+    </div>
+  `);
+
+  document.getElementById("media-viewer-close").addEventListener("click", closeModal);
+}
+
+async function onInsertMedia() {
+  const result = await window.pywebview.api.insert_media_file(currentOpenFolderId);
+  if (!result.success) {
+    if (result.message !== "No file selected.") {
+      alert(result.message);
+    }
+    return;
+  }
+  loadFolderFiles(currentOpenFolderId);
 }
 
 // ---------- Renewal notifications ----------

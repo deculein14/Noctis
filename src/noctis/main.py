@@ -1,7 +1,22 @@
 import os
+import shutil
+import uuid
 import webview
+from pathlib import Path
 
 from noctis import database, security
+
+IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"}
+VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv", ".webm"}
+
+
+def _classify_file(extension):
+    ext = extension.lower()
+    if ext in IMAGE_EXTENSIONS:
+        return "image"
+    if ext in VIDEO_EXTENSIONS:
+        return "video"
+    return None
 
 
 class Api:
@@ -337,6 +352,22 @@ class Api:
         return {"success": True}
 
     def delete_folder(self, folder_id):
+        file_rows = database.get_folder_files(self.current_username, folder_id)
+        media_dir = Path(security.get_media_directory(self.current_username)) / str(folder_id)
+
+        for row in file_rows:
+            file_path = media_dir / row["stored_filename"]
+            try:
+                file_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+
+        try:
+            media_dir.rmdir()
+        except OSError:
+            pass
+
+        database.delete_folder_files(self.current_username, folder_id)
         database.delete_folder(self.current_username, folder_id)
         return {"success": True}
 
@@ -355,6 +386,62 @@ class Api:
             "name": folder["name"],
             "description": folder["description"],
         }
+
+    def insert_media_file(self, folder_id):
+        window = webview.windows[0]
+        file_types = (
+            'Media Files (*.jpg;*.jpeg;*.png;*.gif;*.bmp;*.webp;*.mp4;*.mov;*.avi;*.mkv;*.webm)',
+        )
+        selection = window.create_file_dialog(
+            webview.OPEN_DIALOG,
+            allow_multiple=False,
+            file_types=file_types,
+        )
+
+        if not selection:
+            return {"success": False, "message": "No file selected."}
+
+        source_path = Path(selection[0])
+        extension = source_path.suffix
+        file_type = _classify_file(extension)
+        if file_type is None:
+            return {"success": False, "message": "Unsupported file type."}
+
+        media_dir = Path(security.get_media_directory(self.current_username)) / str(folder_id)
+        media_dir.mkdir(parents=True, exist_ok=True)
+
+        stored_filename = f"{uuid.uuid4().hex}{extension}"
+        destination_path = media_dir / stored_filename
+
+        try:
+            shutil.move(str(source_path), str(destination_path))
+        except OSError as e:
+            return {"success": False, "message": f"Could not move file: {e}"}
+
+        database.add_folder_file(
+            self.current_username,
+            folder_id,
+            source_path.name,
+            stored_filename,
+            file_type,
+        )
+
+        return {"success": True}
+
+    def get_folder_files(self, folder_id):
+        rows = database.get_folder_files(self.current_username, folder_id)
+        media_dir = Path(security.get_media_directory(self.current_username)) / str(folder_id)
+
+        result = []
+        for row in rows:
+            file_path = media_dir / row["stored_filename"]
+            result.append({
+                "id": row["id"],
+                "original_filename": row["original_filename"],
+                "file_type": row["file_type"],
+                "url": file_path.resolve().as_uri(),
+            })
+        return result
 
 
 def get_web_path(filename):
