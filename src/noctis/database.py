@@ -1,5 +1,6 @@
+import calendar
 import sqlite3
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 from noctis import security
@@ -70,6 +71,17 @@ def initialize_database(username):
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             subscription_id INTEGER NOT NULL,
             value TEXT NOT NULL,
+            FOREIGN KEY (subscription_id) REFERENCES subscriptions (id) ON DELETE CASCADE
+        )
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS subscription_payments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            subscription_id INTEGER NOT NULL,
+            months_paid INTEGER NOT NULL,
+            previous_due_date TEXT NOT NULL,
+            new_due_date TEXT NOT NULL,
+            paid_at TEXT NOT NULL,
             FOREIGN KEY (subscription_id) REFERENCES subscriptions (id) ON DELETE CASCADE
         )
     """)
@@ -304,6 +316,76 @@ def delete_subscription_privileges(username, subscription_id):
     connection = get_connection(username)
     cursor = connection.cursor()
     cursor.execute("DELETE FROM subscription_privileges WHERE subscription_id = ?", (subscription_id,))
+    connection.commit()
+    connection.close()
+
+
+def _add_months(source_date, months):
+    """
+    Add a whole number of months to a date, clamping the day to the last
+    valid day of the resulting month (e.g. Jan 31 + 1 month -> Feb 28/29).
+    """
+    month_index = source_date.month - 1 + months
+    year = source_date.year + month_index // 12
+    month = month_index % 12 + 1
+    day = min(source_date.day, calendar.monthrange(year, month)[1])
+    return date(year, month, day)
+
+
+def mark_subscription_paid(username, subscription_id, months_paid):
+    """
+    Marks a subscription as paid for `months_paid` months, advancing its
+    date_ended (used as the renewal/due date) forward from its CURRENT
+    date_ended value (not from today), so the billing schedule stays
+    consistent even if the payment was logged a few days late.
+
+    Logs the payment in subscription_payments and returns the new due date
+    as an ISO date string ("YYYY-MM-DD").
+    """
+    connection = get_connection(username)
+    cursor = connection.cursor()
+    cursor.execute("SELECT date_ended FROM subscriptions WHERE id = ?", (subscription_id,))
+    row = cursor.fetchone()
+    if row is None or not row["date_ended"]:
+        connection.close()
+        raise ValueError("Subscription has no due date set, so it can't be marked as paid.")
+
+    previous_due_date = row["date_ended"]
+    current_due = datetime.strptime(previous_due_date, "%Y-%m-%d").date()
+    new_due = _add_months(current_due, months_paid)
+    new_due_str = new_due.isoformat()
+    now = datetime.now(timezone.utc).isoformat()
+
+    cursor.execute("""
+        UPDATE subscriptions SET date_ended = ?, updated_at = ? WHERE id = ?
+    """, (new_due_str, now, subscription_id))
+    cursor.execute("""
+        INSERT INTO subscription_payments (subscription_id, months_paid, previous_due_date, new_due_date, paid_at)
+        VALUES (?, ?, ?, ?, ?)
+    """, (subscription_id, months_paid, previous_due_date, new_due_str, now))
+
+    connection.commit()
+    connection.close()
+    return new_due_str
+
+
+def get_subscription_payments(username, subscription_id):
+    connection = get_connection(username)
+    cursor = connection.cursor()
+    cursor.execute("""
+        SELECT * FROM subscription_payments
+        WHERE subscription_id = ?
+        ORDER BY paid_at DESC
+    """, (subscription_id,))
+    rows = cursor.fetchall()
+    connection.close()
+    return rows
+
+
+def delete_subscription_payments(username, subscription_id):
+    connection = get_connection(username)
+    cursor = connection.cursor()
+    cursor.execute("DELETE FROM subscription_payments WHERE subscription_id = ?", (subscription_id,))
     connection.commit()
     connection.close()
 
