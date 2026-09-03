@@ -403,6 +403,23 @@ def get_folder_files(username, folder_id):
     return rows
 
 
+def get_folder_file(username, file_id):
+    connection = get_connection(username)
+    cursor = connection.cursor()
+    cursor.execute("SELECT * FROM folder_files WHERE id = ?", (file_id,))
+    row = cursor.fetchone()
+    connection.close()
+    return row
+
+
+def delete_folder_file(username, file_id):
+    connection = get_connection(username)
+    cursor = connection.cursor()
+    cursor.execute("DELETE FROM folder_files WHERE id = ?", (file_id,))
+    connection.commit()
+    connection.close()
+
+
 def delete_folder_files(username, folder_id):
     connection = get_connection(username)
     cursor = connection.cursor()

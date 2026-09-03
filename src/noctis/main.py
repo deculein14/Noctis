@@ -1,3 +1,5 @@
+import base64
+import mimetypes
 import os
 import shutil
 import uuid
@@ -435,13 +437,42 @@ class Api:
         result = []
         for row in rows:
             file_path = media_dir / row["stored_filename"]
+            try:
+                file_bytes = file_path.read_bytes()
+            except OSError:
+                # File is missing on disk (e.g. manually deleted outside the app) - skip it.
+                continue
+
+            mime_type, _ = mimetypes.guess_type(row["stored_filename"])
+            if mime_type is None:
+                mime_type = "application/octet-stream"
+
+            encoded = base64.b64encode(file_bytes).decode("ascii")
+            data_url = f"data:{mime_type};base64,{encoded}"
+
             result.append({
                 "id": row["id"],
                 "original_filename": row["original_filename"],
                 "file_type": row["file_type"],
-                "url": file_path.resolve().as_uri(),
+                "url": data_url,
             })
         return result
+
+    def remove_media_file(self, file_id):
+        row = database.get_folder_file(self.current_username, file_id)
+        if row is None:
+            return {"success": False, "message": "File not found."}
+
+        media_dir = Path(security.get_media_directory(self.current_username)) / str(row["folder_id"])
+        file_path = media_dir / row["stored_filename"]
+
+        try:
+            file_path.unlink(missing_ok=True)
+        except OSError as e:
+            return {"success": False, "message": f"Could not delete file: {e}"}
+
+        database.delete_folder_file(self.current_username, file_id)
+        return {"success": True}
 
 
 def get_web_path(filename):
@@ -459,7 +490,7 @@ def main():
         height=800,
         resizable=False,
     )
-    webview.start()
+    webview.start(debug=True)
 
 
 if __name__ == "__main__":

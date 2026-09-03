@@ -1489,6 +1489,7 @@ function showFolderDetailView(folder) {
       </div>
 
       <div class="detail-section-label">Contents</div>
+      <p class="empty-state" style="margin-top:-8px; margin-bottom:12px;">Right-click a file to remove it.</p>
       <div id="media-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(140px, 1fr)); gap:12px;"></div>
 
       <div class="detail-button-row">
@@ -1548,7 +1549,56 @@ function buildMediaThumbnail(file) {
   }
 
   thumb.addEventListener("click", () => showMediaViewer(file));
+  thumb.addEventListener("contextmenu", (event) => {
+    event.preventDefault();
+    showMediaFileContextMenu(event.pageX, event.pageY, file);
+  });
+
   return thumb;
+}
+
+function showMediaFileContextMenu(x, y, file) {
+  const existing = document.getElementById("media-file-context-menu");
+  if (existing) existing.remove();
+
+  const menu = document.createElement("div");
+  menu.id = "media-file-context-menu";
+  menu.style.cssText = `
+    position: fixed;
+    top: ${y}px;
+    left: ${x}px;
+    background: #1A1D24;
+    border: 1px solid #2A2E38;
+    border-radius: 6px;
+    padding: 4px;
+    z-index: 200;
+    min-width: 120px;
+  `;
+
+  const removeOption = document.createElement("div");
+  removeOption.textContent = "Remove";
+  removeOption.style.cssText = "padding: 8px 12px; cursor: pointer; font-size: 13px; color: #EF4444; border-radius: 4px;";
+  removeOption.addEventListener("mouseenter", () => removeOption.style.background = "#22262F");
+  removeOption.addEventListener("mouseleave", () => removeOption.style.background = "transparent");
+  removeOption.addEventListener("click", async () => {
+    menu.remove();
+    const confirmed = confirm(`Remove "${file.original_filename}"? This cannot be undone.`);
+    if (confirmed) {
+      await window.pywebview.api.remove_media_file(file.id);
+      loadFolderFiles(currentOpenFolderId);
+    }
+  });
+
+  menu.appendChild(removeOption);
+  document.body.appendChild(menu);
+
+  const closeMenu = (event) => {
+    if (!menu.contains(event.target)) {
+      menu.remove();
+      document.removeEventListener("click", closeMenu);
+    }
+  };
+  setTimeout(() => document.addEventListener("click", closeMenu), 0);
 }
 
 function showMediaViewer(file) {

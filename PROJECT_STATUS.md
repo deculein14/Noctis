@@ -1,79 +1,18 @@
 # Noctis — Project Status
 
 ## Current Step
-MAJOR PIVOT IN PROGRESS: migrating the UI from tkinter to pywebview (HTML/CSS/JS desktop window). The tkinter UI (`ui.py`, `main.py`) has been deleted (recoverable from Git history at or before commit `d5bec15` if ever needed). `security.py`, `database.py`, and `config.py` are untouched and fully reusable as-is — they have no tkinter dependency. **The app currently does not run at all** — there is no UI layer until the pywebview version is built. This was an explicit, confirmed decision (accepted the app being non-functional during the rebuild) rather than an accident.
+Images & Videos section (Folders) is built and tested. This followed the pywebview UI migration (see Completed Steps 1-21) and the Subscriptions feature build-out. Testing the Subscriptions feature end-to-end is still pending from before the Images & Videos detour.
 
-### Why this pivot happened
-User wanted real CSS animations/hover transitions, which tkinter cannot do (no animation/transition system). Confirmed via a working pywebview proof-of-concept (a test window with a smooth CSS button hover transition) that the approach works on this machine before committing to the migration. This aligns Noctis's stack with how real commercial password managers (1Password, Bitwarden) build their desktop UIs (HTML/CSS/JS wrapped in a native window), just using a lighter Python-friendly tool (pywebview) instead of Electron/Node.js.
-
-### Planned migration order
-1. ✅ DONE — Set up project structure: `src/noctis/web/` folder created; `main.py` rebuilt with a pywebview `Api` class bridging JS calls to `security.py`.
-2. ✅ DONE — Login/Register screen rebuilt (`login.html`, `style.css`, `login.js`): mode toggle, email field shown only in register mode, password show/hide toggle, real CSS focus/hover transitions. Fixed a browser quirk where Edge's native password-reveal icon doubled up with our custom eye button (hidden via `::-ms-reveal`/`::-ms-clear` CSS).
-3. ✅ DONE — Vault list rebuilt (`vault.html`, `vault.css`, `vault.js`): grouping by account name, live search, category chips, Favorites chip, star toggle, delete with a native `confirm()` popup.
-   - **IMPORTANT BUG FIXED:** calling `window.load_url(...)` from inside a Python API method (itself invoked from JS) caused the entire app to freeze/hang on Windows — this is a known pywebview gotcha (the API call runs on a background thread, and triggering navigation from that thread can deadlock the UI thread). Fix: Python API methods only return data/success-failure; all page navigation (`window.location.href = "..."`) happens in JavaScript instead. **Rule going forward: never call `window.load_url()` (or similar navigation) from inside a Python API method — always navigate from JS.**
-4. ✅ DONE — Account/Category creation modal flow built directly into the vault page (no separate HTML file): "+" opens a Category/Account choice, Category form saves to a real `categories` table via `add_category`, Account form collects title/email/username/password/notes/url plus arbitrary custom fields (added via a `prompt()` popup), followed by a category-picker step before saving (`save_account` API method, mirroring the old tkinter flow).
-   - **BUG FIXED — registration auto-login:** `register_user` originally called `session.unlock()` and navigated straight to the vault; changed so registering only creates the account and returns the user to the Login form with a "Account created! Please log in." message — matching the desired UX of not auto-logging in after signup.
-   - **BUG FIXED — empty vault list on first login:** after `window.location.href` navigates to `vault.html`, pywebview needs a moment to re-inject `window.pywebview.api` into the new page; calling `get_entries()` immediately (before injection completes) silently failed, showing an empty list until any other API call succeeded later. Fix: wait for the `pywebviewready` event before the first `loadEntries()` call if `window.pywebview` isn't already present. **Rule going forward: any page that calls the API immediately on load (not from a user click) must guard with this same `pywebviewready` check.**
-   - **BUG FIXED — form fields clearing on custom-field add/remove:** re-rendering the account form (to show a newly added custom field) only preserved custom field values, not the main fields (title/email/username/password/notes/url), wiping them each time. Also affected the "Back" button from the category picker. Fix: introduced `pendingAccount` as a persistent draft object populated via `saveMainFieldValues()` before every re-render, and the category picker's Back button now calls `renderAccountForm()` directly (preserving the draft) instead of resetting it.
-   - "View" (both single-entry and grouped) is still a placeholder `alert()` — not built yet.
-5. ✅ DONE — View screen rebuilt: shows Email, Username, Notes, URL, and custom fields in plain text (each with its own 📋 copy icon using `navigator.clipboard`). Password stays masked with 👁 (reveal) and 📋 (copy) icons, both gated behind a custom master-password confirmation modal (`promptForMasterPassword`) — masked input, not the browser's native `prompt()`. Favorite toggle and Delete (native `confirm()`) moved into the View screen. Edit also requires master-password re-authentication, then opens the account form pre-filled with the real (decrypted) password and existing custom fields; saving correctly calls `update_account` (not `save_account`) to avoid creating a duplicate. Grouped accounts get a sub-list screen (labeled by username/email, falling back to "Account N") with just a View button per row — no star, to avoid redundancy with the View screen's own favorite toggle. Single-account list rows were also simplified to show only View (star/delete removed from the row, same reasoning).
-6. ✅ DONE — Category management: right-click a category chip (not "All"/"Favorites") to open a small context menu with Rename and Delete. Rename updates both the `categories` table and every account currently using that name. Delete removes the category and sets affected accounts back to uncategorized (does not delete the accounts). New `database.py` functions: `rename_category`, `delete_category`. New `main.py` API methods of the same names.
-7. Final wiring and cleanup — remaining: decide whether the `web_test` proof-of-concept pattern needs anything else, review for consistency, confirm no leftover placeholder `alert()`s remain, then resume the original numbered roadmap (Testing, Error Handling, Packaging, Final Security Review, v0.1.0 Release).
-8. ✅ DONE — Professional design system overhaul (CSS-only, no backend/JS logic changes): introduced CSS custom properties (design tokens) in `style.css` covering color (deep night-blue background with a layered elevation scale: bg → surface-1 → surface-2 → surface-3), spacing (strict 4px-based scale), radius, and shadow values, applied consistently across `style.css` and `vault.css`. Typography hierarchy established: uppercase letter-spaced micro-labels (11px) for field labels vs. readable body text (14px) for values. Button hierarchy: primary actions stay solid-filled, secondary actions (Cancel/Back) became outlined/ghost to reduce visual competition. Entry-row subtitles ("1 account"/"N accounts") became small pill badges. Modals gained real depth via layered shadows and a subtle backdrop blur. Added an app tagline ("Local. Encrypted. Yours.") under the Noctis title for identity.
-9. ✅ DONE — Replaced all emoji icons (👁 📋 ★ ☆ × +) with a monochrome inline SVG icon set using `stroke="currentColor"` / `fill="currentColor"`, so icons properly inherit the theme's colors and respond to hover/active states like real icons, instead of rendering as colorful OS emoji that clashed with the design system. Covers: password show/hide (login + account form, swaps between open/crossed-eye SVGs on toggle), per-field copy buttons in the View screen, password reveal/copy buttons, remove-custom-field button, favorite star (filled/outline variants), and the main "+" add button. Added `.icon-svg` sizing/centering CSS rules to `style.css` and `vault.css`.
-10. ✅ DONE — Repo housekeeping: added `LICENSE` (MIT, with a plain-English "In short" summary explaining the credit requirement) and `.gitattributes` (normalizes all text files to LF line endings, eliminating the recurring "LF will be replaced by CRLF" Git warning seen throughout the project). Repository visibility decision: made public on GitHub (user's decision, after verifying via `git log --all --full-history` that no sensitive files — `.env`, `users.json`, `*.db` — were ever committed at any point in history).
-11. ✅ DONE — Accessibility and interaction polish pass on the Add Account/Category modal (applying `/ui-ux-pro-max` principles manually, since its live search tool/database is not available in this sandboxed environment — only its instructions file is present): added `aria-label`s to icon-only buttons, visible focus rings (`:focus-visible`) on every interactive element, increased icon-button touch targets to 40px minimum, added a subtle fade+scale modal entrance animation (respects `prefers-reduced-motion`), auto-focus on the first field when any modal opens, and `Escape` key closes the active modal.
-12. ✅ DONE — Bundled the Inter variable font (`web/fonts/Inter-Variable.ttf`, fetched from the official Google Fonts GitHub mirror so the app has zero runtime internet dependency, consistent with Noctis's offline-first design) via `@font-face` in `style.css`, replacing the plain Segoe UI system font across the entire app for a more modern, refined typeface. Single variable-font file covers all weights (100–900) already in use.
-13. ✅ DONE — View screen redesign for visual richness (again applying `/ui-ux-pro-max` principles manually): added a colored avatar circle per account (deterministic color generated from a hash of the account name, so the same account always gets the same color), field-type icons (mail/person/lock/note/link/tag) beside each label, grouped fields into "Login Details" and "Additional Information" sections with subtle dividers, wrapped the whole view in an elevated card instead of floating on the bare background, and rendered the revealed password in a monospace font for easier character verification. Extended the same fade-in transition, copy-confirmation flash (checkmark replaces the copy icon briefly), and `Escape`-to-go-back behavior established in item 11 to the View and group-list screens.
-14. ✅ DONE — Confirm Password field on registration (`login.html`/`login.js`): validates the two password fields match before allowing account creation; hidden in Login mode, shown in Register mode.
-15. ✅ DONE — Email verification during registration (Noctis's first feature requiring internet access, and only at this one moment — daily use remains fully offline):
-    - User's own Gmail account is used to send a 6-digit code, authenticated via a Gmail "App Password" (not the real account password) stored in `.env` as `GMAIL_ADDRESS` and `GMAIL_APP_PASSWORD` — never committed, loaded via the new `python-dotenv` dependency.
-    - **Security incident during setup:** the user accidentally pasted a real, freshly-generated Gmail App Password directly into this chat. Flagged immediately as compromised; user was instructed to revoke it on Google's end and generate a fresh one, which they did before it was ever used in code. No credential from that incident was used or stored.
-    - `security.py`: `send_verification_code(email)` generates a random 6-digit code, stores it with a 10-minute expiry in `pending_verifications.json` (git-ignored), and emails it via `smtplib`/Gmail SMTP. `check_verification_code(email, code)` validates and consumes the code (deleted after one successful or expired check, single-use).
-    - Registration is now a three-step flow: (1) fill in Username/Email/Password/Confirm Password and click "Send Verification Code" → (2) a 6-digit code field appears, other fields disable, user checks their email and enters the code → (3) clicking "Verify & Create Account" calls `confirm_registration`, which only then actually creates the account via the existing `security.register_user()`. If the code is wrong or expired, the account is never created.
-    - New `main.py` API methods: `request_registration_code` (validates username/email/password rules first, then sends the code) and `confirm_registration` (checks the code, then registers). The old single-step `register_user` API method was removed/replaced by these two.
-    - Fixed a minor input bug: the verification code field originally let spaces/non-digit characters consume slots up to its 6-character limit (e.g. one space + 5 digits); added a live `input` filter (`replace(/\\D/g, "")`) so only digits are ever accepted.
-    - `pending_verifications.json` added to `.gitignore`. `account_log.txt` (from earlier work, holds username/email pairs for the user's own reference — no passwords) was found to be missing from `.gitignore` during this session and has now been added.
-16. ✅ DONE — Fixed window size and sidebar navigation:
-    - Window is now fixed at **1200×800**, non-resizable (`resizable=False` in `webview.create_window()` in `main.py`) — same size for every user, no maximize/minimize-to-different-size drift.
-    - Added a persistent left sidebar to `vault.html`, replacing the old single-page layout. Final agreed order: **Accounts** (top) → **Subscriptions** → **Images & Videos** (combined into one item/page, since related) → **Settings** (bottom).
-    - "Accounts" reuses all pre-existing vault functionality (list, search, categories, favorites, View screen) unchanged — just now reached via the sidebar instead of being the only page.
-    - "Images & Videos" and "Settings" are still empty placeholder pages (title + "This section is coming soon") — no spec discussed yet for either.
-    - Sidebar click handling in `vault.js` swaps which `.content-section` is visible and highlights the active item; each section's specific `show...MainView()` function (e.g. `showMainView()`, `showSubscriptionsMainView()`) is called on activation to (re)load that section's data fresh.
-17. ✅ DONE — Subscriptions feature, first real content in the new sidebar:
-    - Database tables (`database.py`): `subscriptions` (name, plan, date_started, date_ended, timestamps) and `subscription_fields` (arbitrary label/value pairs per subscription, e.g. benefits — stored as **plain text, not encrypted**, since subscription info isn't a secret like a password; explicit decision, differs from the Accounts encryption model).
-    - CRUD functions: `add_subscription`, `get_all_subscriptions`, `update_subscription`, `delete_subscription`, `add_subscription_field`, `get_subscription_fields`, `delete_subscription_fields`.
-    - `main.py` API methods: `get_subscriptions`, `get_subscription_details`, `save_subscription`, `update_subscription`, `delete_subscription` — no master-password re-authentication gating (unlike Accounts' password reveal/edit), consistent with the "not a secret" decision above.
-    - UI in `vault.js`/`vault.html`: list view (name + plan per row, matching the Accounts row style), an add/edit modal with Subscription Name, Plan, Date Availed, Date Ended (native `<input type="date">` fields), plus a "+ Add Field" mechanism identical in pattern to Accounts' custom fields. A detail/View screen (avatar circle, grouped fields, Edit/Delete/Back) mirrors the Accounts View screen's visual style, minus the password-specific parts.
-18. ✅ DONE — Subscriptions UX overhaul, three linked changes:
-    - **Privileges list**: added a dedicated, always-visible **Privileges** section (e.g. "No ads", "Better quality") — a plain growing list of text items, no label required, with its own "+ Add Privilege" and per-item remove button. The original "+ Add Field" (custom label/value pairs) was kept as-is for one-off fields — Privileges is additive, not a replacement. New table `subscription_privileges` (id, subscription_id, value); new functions `add_subscription_privilege`, `get_subscription_privileges`, `delete_subscription_privileges`. View screen shows Privileges as a bullet list under its own section label.
-    - **Hover-to-expand row, no separate View button**: subscription list rows no longer have a "View" button — the entire row is clickable (and keyboard-accessible: focusable, Enter/Space triggers it) and goes straight to the detail/View screen (Edit lives inside it, same pattern as Accounts). Hovering (or keyboard-focusing) a row smoothly expands it in place to preview that subscription's privileges list via a CSS max-height transition. Respects `prefers-reduced-motion`.
-    - **End date shown on the row**: the list row shows a second small pill — "Ends [formatted date]" — next to the plan pill, only when `date_ended` is set.
-19. ✅ DONE — Notification bell for upcoming renewals:
-    - A bell icon is **fixed to the top-right corner of the entire window** (`position: fixed`, independent of the sidebar), visible from every section including Accounts — not just Subscriptions.
-    - Shows a red dot when any subscription's `date_ended` is exactly 30, 7, 3, or 1 day(s) away, or already due/overdue (≤0 days) — computed client-side in `vault.js` from data already returned by `get_subscriptions` (no new backend calls needed).
-    - Clicking the bell opens a dropdown listing each due subscription with a countdown label (e.g. "ends in 3 days", "overdue by 2d"); clicking an item switches the sidebar to Subscriptions and opens that subscription's detail view directly (`activateSection()` helper added to share this logic between sidebar clicks and notification clicks).
-    - Dropdown/dot refresh automatically after any subscription save, update, or delete (`refreshNotifications()` called at the end of those flows) and on initial app load.
-    - **Bug fixed — content cut off when jumping via notification:** clicking a notification (or switching sidebar sections generally) could open a view with horizontal scroll already offset, clipping the left edge of text (e.g. "Spotify" showing as "potify"). Fixed with two changes: (1) `overflow-x: hidden` added to `html`, `body`, and `.content-area` to prevent the page from ever scrolling sideways in the first place; (2) a new `resetScroll()` helper forces horizontal scroll back to 0 on every view transition (main view, detail view, group list, subscriptions, section switches) as a belt-and-suspenders fix.
-    - **Bell placement iterated twice:** first tried inside the sidebar next to the "Noctis" brand text (too cramped, sidebar too narrow), then moved to a `position: fixed` element anchored to the browser window's top-right corner — fully independent of sidebar width, doesn't clip regardless of window/sidebar size.
-20. ✅ DONE — Subscription amount in PHP (peso):
-    - **Design decision:** originally explored live currency conversion (any currency → PHP via the Frankfurter API, matching the "only email verification touches the internet" pattern), but this was reverted after connectivity issues fetching the rate. Final approach: **amount is entered and stored directly in PHP**, no currency selection, no internet dependency, no separate "converted from" note.
-    - `subscriptions` table gained an `amount` column (`REAL`) in `database.py`, added via `ALTER TABLE ... ADD COLUMN` wrapped in try/except (safe to run repeatedly, so old databases upgrade automatically on next login). Leftover `currency`/`php_amount` columns from the abandoned live-conversion attempt may still exist in the schema from that intermediate step but are unused — harmless.
-    - `add_subscription`/`update_subscription` (`database.py`) and `save_subscription`/`update_subscription` (`main.py`) now accept/store a plain `amount` float; no `convert_to_php`/`urllib` code remains in `main.py`.
-    - Add/Edit Subscription form (`vault.js`) has an **Amount (₱, optional)** field — deliberately `type="text" inputmode="decimal"` rather than `type="number"`, specifically to avoid the browser's default increment/decrement spinner arrows, with a live JS input filter restricting entry to digits and a single decimal point.
-    - Amount now displays in **three places** for at-a-glance visibility without opening the full View screen:
-      1. On the subscription **list row** itself, as a third pill (green/success-colored via new `.subscription-amount-pill` CSS class) after the plan and end-date pills — e.g. "Spotify Premium · Ends Sep 30, 2026 · ₱149.00".
-      2. In the full **View screen**, as an "Amount" field row (₱-formatted) alongside Plan/Date Availed/Date Ended.
-      3. In the **notification dropdown**, appended after the countdown label (e.g. "ends in 3 days · ₱149.00") so the amount due is visible without navigating to the Subscriptions page at all.
-    - New `formatPHP(amount)` helper in `vault.js` (₱ symbol + thousands separator + 2 decimal places) used consistently across all three display locations.
+### Why the pywebview pivot happened (background)
+User wanted real CSS animations/hover transitions, which tkinter cannot do (no animation/transition system). Confirmed via a working pywebview proof-of-concept before committing to the migration. This aligns Noctis's stack with how real commercial password managers (1Password, Bitwarden) build their desktop UIs (HTML/CSS/JS wrapped in a native window), using a lighter Python-friendly tool (pywebview) instead of Electron/Node.js.
 
 ## Completed Steps
-1. Git & GitHub setup — local repo initialized, private GitHub repo created, connected, pushed.
+1. Git & GitHub setup — local repo initialized, private GitHub repo created (later made public — see below), connected, pushed.
 2. Project structure — `src/noctis/`, `tests/`, `docs/`, `requirements.txt` created.
 3. Development environment — Python 3.14.5 confirmed, `venv` created, `cryptography` installed.
-4. Basic application entry point — `main.py` opens a tkinter window.
+4. Basic application entry point — `main.py` opens a tkinter window (later replaced by pywebview — see below).
 5. Configuration/environment setup — `config.py` for non-sensitive settings, `.env` / `.env.example` pattern established for secrets.
-6. Database/local storage design — original single-vault SQLite schema (superseded, see below).
+6. Database/local storage design — original single-vault SQLite schema (superseded by multi-user + feature-specific tables — see below).
 7. Security architecture (planning) — salt → PBKDF2 → key → AES/Fernet encryption → verification token flow (still the core approach, now applied per-user).
 8-9. Master password + encryption/key management — `VaultSession`, PBKDF2, Fernet — originally single-vault, later refactored to per-user (see Multi-User step).
 10. Authentication and failed-attempt protection — `LoginGuard`: escalating lockout delays (5s/15s/30s/60s), later refactored to be per-username.
@@ -91,38 +30,92 @@ User wanted real CSS animations/hover transitions, which tkinter cannot do (no a
     - Login mode: Username + Password only. Shows "No account found... please register first" if the username doesn't exist (does not silently auto-register).
     - Register mode: Email + Username + Password. Shows "An account already exists..." if the username is taken, and separately blocks reuse of an email already tied to another account.
     - A text link toggles between modes ("No account yet? Register" / "Already have an account? Log in").
-    - Password visibility (eye icon 👁) toggle added to the login screen's password field.
-    - Explicitly declined: writing master passwords (in any form, including "temporary," reversible, or simple substitution ciphers) to any plaintext or lightly-obfuscated log file. This was requested multiple times and consistently declined as a serious security regression. A safe compromise (logging username/email only, never passwords, to `account_log.txt`) was designed but ultimately not applied per final direction — current code has no account activity log.
+    - Password visibility (eye icon) toggle added to the login screen's password field.
+    - Explicitly declined: writing master passwords (in any form, including "temporary," reversible, or simple substitution ciphers) to any plaintext or lightly-obfuscated log file.
 19. Account creation UX redesign — Replaced the old single "+ Add Entry" flow entirely:
     - The "+" button now opens a choice: **Category** or **Account**.
-    - **Category**: simple name field, saved to a real, reusable `categories` table (no longer just inferred from existing entries).
-    - **Account**: multi-field form — "What account?" (the entry's title, e.g. "Instagram"), Email (optional), Username (optional), Password (required, with eye-icon visibility toggle), Notes (optional, encrypted), URL (optional), plus a "+ Add Field" option to create arbitrary custom labeled fields (e.g. "Phone Number") via a popup dialog — custom field values are encrypted and stored in a new `custom_fields` table linked to the entry.
-    - After filling the account form, a **separate category-picker screen** appears to choose where the account should be filed, before final save.
+    - **Category**: simple name field, saved to a real, reusable `categories` table.
+    - **Account**: multi-field form — title, Email (optional), Username (optional), Password (required), Notes (optional, encrypted), URL (optional), plus a "+ Add Field" option for arbitrary custom labeled fields (encrypted, stored in a `custom_fields` table linked to the entry).
+    - Separate category-picker screen appears before final save.
     - Database schema updated: `entries` table gained `email` and `encrypted_notes` columns; new `categories` and `custom_fields` tables added.
-    - All vault screens (list, add-choice, category form, account form, category picker) wrapped in a scrollable canvas with mouse-wheel support and clamped scroll boundaries (fixed an early bug where scrolling up past the top caused visual glitching), so content is reachable without needing to maximize the window.
-    - Fixed a bug where newly added custom fields were packed into the wrong parent frame and appeared below the Cancel/Continue buttons instead of above them.
-20. View screen with re-authentication — Clicking an entry now shows a "View" screen (not a direct edit) listing Account Name, Category, Email, Username, Notes, URL, and any custom fields in plain readable text. The Password field stays masked with a 👁 icon; clicking it opens a popup requiring the master password to be re-entered before the real password is revealed inline (wrong password shows an error and keeps it hidden). Notes and custom fields do NOT require re-authentication (explicit scope decision — only the password itself is gated). An "Edit" button inside the View screen opens the existing edit form.
+20. View screen with re-authentication — "View" screen lists Account Name, Category, Email, Username, Notes, URL, custom fields in plain text. Password stays masked; a popup requires the master password before revealing it inline. Notes/custom fields do NOT require re-authentication. "Edit" button opens the existing edit form.
 21. View screen refinements and grouped accounts —
-    - Removed the "Copy" button from the entry row entirely. Added a 📋 copy icon next to every field inside the View screen (Email, Username, Notes, URL, custom fields) so a specific field's value can be copied directly. The Password field's copy icon requires the same master-password re-authentication as reveal; once entered correctly once per view, both reveal and copy work without asking again.
-    - Delete now requires a second confirmation ("Are you sure you want to delete '[name]'? This cannot be undone.") via a popup before actually removing an entry — applies both on the list row and inside the View screen.
-    - Edit (from the View screen) now also requires re-entering the master password before the edit form opens — wrong password cancels the edit attempt with an error message.
-    - Grouped accounts: entries sharing the same account name (case-insensitive, e.g. two "Facebook" entries) now collapse into a single list row showing the name and an account count (e.g. "2 accounts"), with only a View button (no star/delete directly on the grouped row). Clicking it opens a sub-list where each account is labeled by its Notes (falling back to username/email, then "Account 1/2/3..."), each with its own Favorite toggle and a View button leading to the full View screen for that specific account. Star (Favorite) and Delete (with confirmation) were moved into the View screen itself for both grouped and single accounts, for consistency.
-    - Single-account list rows now show "1 account" as the subtitle (replacing the old username/category subtitle), matching the grouped-row style; actions (star/view/delete) on single rows are unchanged.
-    - Confirmed filter-chip order (All → Favorites → categories alphabetically) already matched the requested ordering — no change needed there.
+    - Per-field copy icons inside the View screen (Email, Username, Notes, URL, custom fields). Password's copy icon requires the same master-password re-authentication as reveal.
+    - Delete requires a second confirmation popup before removing an entry.
+    - Edit (from the View screen) also requires re-entering the master password.
+    - Grouped accounts: entries sharing the same account name collapse into a single list row ("N accounts"); a sub-list shows each individually labeled account, each with its own Favorite toggle and View button.
+
+### pywebview UI migration (superseded tkinter — items below happened in sequence)
+1. Project structure for the web UI: `src/noctis/web/` folder created; `main.py` rebuilt with a pywebview `Api` class bridging JS calls to `security.py`.
+2. Login/Register screen rebuilt (`login.html`, `style.css`, `login.js`): mode toggle, email field shown only in register mode, password show/hide toggle, real CSS focus/hover transitions.
+3. Vault list rebuilt (`vault.html`, `vault.css`, `vault.js`): grouping by account name, live search, category chips, Favorites chip, star toggle, delete with confirmation.
+   - **Bug fixed:** calling `window.load_url(...)` from inside a Python API method caused the app to freeze on Windows (a known pywebview gotcha — API calls run on a background thread, and navigation from that thread can deadlock the UI thread). Fix: Python API methods only return data; all page navigation happens in JavaScript. **Rule: never call `window.load_url()` from inside a Python API method.**
+4. Account/Category creation modal flow built into the vault page. `pendingAccount` draft object introduced to prevent form fields clearing when custom fields are added/removed or when navigating back from the category picker.
+   - **Bug fixed — registration auto-login:** registering now returns to the Login form with a message instead of auto-logging in.
+   - **Bug fixed — empty vault list on first login:** added a `pywebviewready` event guard before the first `loadEntries()` call, since `window.pywebview.api` isn't injected instantly after `window.location.href` navigation. **Rule: any page that calls the API immediately on load must guard with this check.**
+5. View screen rebuilt with copy icons, masked/revealed password gated behind a custom master-password modal (`promptForMasterPassword`), Favorite/Delete moved into the View screen, grouped sub-list screen.
+6. Category management: right-click a category chip for Rename/Delete (updates both the `categories` table and any accounts using that name).
+7. Final wiring and cleanup pass — confirmed no leftover placeholder `alert()`s remained for Accounts.
+8. Professional design system overhaul (CSS-only): design tokens (color, spacing, radius, shadow) in `style.css`, layered dark palette, typography hierarchy, button hierarchy, pill badges, layered modal shadows/blur, app tagline ("Local. Encrypted. Yours.").
+9. Replaced all emoji icons with a monochrome inline SVG icon set (`stroke="currentColor"`/`fill="currentColor"`) across password show/hide, copy buttons, remove-field button, favorite star, "+" button.
+10. Repo housekeeping: added `LICENSE` (MIT) and `.gitattributes` (LF line endings). Repository made public after verifying via full Git history search that no secrets (`.env`, `users.json`, `*.db`) were ever committed.
+11. Accessibility/interaction polish on the Add Account/Category modal: `aria-label`s, visible focus rings, 40px minimum touch targets, fade+scale modal entrance animation (respects `prefers-reduced-motion`), auto-focus on first field, Escape closes modals.
+12. Bundled Inter variable font (`web/fonts/Inter-Variable.ttf`) via `@font-face`, replacing system font, keeping the app's zero-runtime-internet-dependency design.
+13. View screen redesign: colored avatar circle per account (deterministic hash-based color), field-type icons, grouped "Login Details"/"Additional Information" sections, elevated card wrapper, monospace revealed password, copy-confirmation flash, Escape-to-go-back.
+14. Confirm Password field on registration, shown only in Register mode.
+15. Email verification during registration (Noctis's only feature requiring internet access, and only at this one moment):
+    - Uses the user's own Gmail account via an App Password (`.env`: `GMAIL_ADDRESS`, `GMAIL_APP_PASSWORD`), via `python-dotenv`.
+    - **Security incident during setup:** a real App Password was accidentally pasted into chat. Flagged immediately; user revoked and regenerated it before it was ever used in code.
+    - `security.py`: `send_verification_code(email)` / `check_verification_code(email, code)`, 10-minute expiry, single-use, stored in git-ignored `pending_verifications.json`.
+    - Three-step registration flow: fill fields → send code → enter code → `confirm_registration` creates the account only after a correct code.
+    - Input filter restricts the code field to digits only.
+    - `pending_verifications.json` and `account_log.txt` added to `.gitignore`.
+16. Fixed window size and sidebar navigation:
+    - Window fixed at 1200×800, non-resizable.
+    - Persistent left sidebar in `vault.html`: **Accounts** → **Subscriptions** → **Images & Videos** → **Settings**.
+    - Sidebar click handling in `vault.js` swaps visible `.content-section` and calls that section's load function.
+17. Subscriptions feature: `subscriptions` and `subscription_fields` tables (plain text, not encrypted — explicit decision, differs from the Accounts encryption model). CRUD API methods, no master-password re-authentication gating. List view, add/edit modal, detail/View screen mirroring the Accounts visual style.
+18. Subscriptions UX overhaul:
+    - **Privileges list**: dedicated always-visible bullet list (separate table `subscription_privileges`), additive to the existing "+ Add Field" custom fields.
+    - **Hover-to-expand row**: entire row clickable/keyboard-accessible, hover/focus expands to preview privileges via CSS `max-height` transition.
+    - **End date pill** shown on the row when `date_ended` is set.
+19. Notification bell for upcoming renewals: fixed top-right of the whole window (visible from every section), red dot when a subscription is due in 30/7/3/1 days or overdue, dropdown listing due subscriptions with countdown labels, clicking navigates to that subscription's detail view. Refreshes after any subscription save/update/delete and on initial load.
+    - **Bug fixed — content cut off when jumping via notification:** added global `overflow-x: hidden` and a `resetScroll()` helper called on every view transition.
+    - Bell placement iterated twice before settling on `position: fixed` anchored to the window, independent of sidebar width.
+20. Subscription amount in PHP (peso):
+    - Live currency conversion (Frankfurter API) was tried and reverted due to connectivity issues — reaffirms the offline-first design principle.
+    - `subscriptions.amount` (REAL) entered/stored directly in PHP, no currency selection. Leftover unused `currency`/`php_amount` columns from the abandoned attempt remain in the schema (harmless).
+    - Amount field uses `type="text" inputmode="decimal"` with a live input filter (not `type="number"`, to avoid spinner arrows).
+    - Displayed in three places: list row pill, View screen field, notification dropdown (`formatPHP()` helper used consistently).
+21. Images & Videos — Folders feature:
+    - New `folders` table (name, description, timestamps) and `folder_files` table (original filename, stored filename, file type, per folder) added to `database.py`.
+    - New `security.get_media_directory(username)` returns a per-user root folder (`media_<username>`) for storing inserted files, following the same naming convention as `get_database_filename`.
+    - Folder CRUD via `main.py` API methods (`get_folders`, `save_folder`, `update_folder`, `delete_folder`) — plain metadata, no encryption, no re-auth needed for these, consistent with the Subscriptions "not a secret" precedent.
+    - **Opening** a folder requires master-password re-authentication (`open_folder` API method, same pattern as `reveal_password`) before its contents are shown — explicit design choice, unlike Subscriptions.
+    - **Inserting media**: `insert_media_file` opens the native Windows file picker (`create_file_dialog`), restricted to image/video extensions. The selected file is **moved** (not copied) into `media_<username>/<folder_id>/`, renamed to a random UUID on disk to avoid collisions, with the original filename preserved in the database for display. Files are stored **unencrypted** (explicit decision — the folder itself still requires master-password re-auth to open, but the files at rest are plain).
+    - **Displaying media**: `get_folder_files` reads each file from disk and returns it as a base64 `data:` URL rather than a `file:///` path — `file:///` URLs are blocked by the WebView2 engine pywebview uses on Windows, causing images/videos to silently fail (broken-image icon). Base64 embedding bypasses this reliably. (Trade-off: large video files will feel slower to open since the whole file is base64-encoded into the page; acceptable for now — revisit later, e.g. pywebview's HTTP server mode, if large-video performance becomes an issue.)
+    - UI: folder rows match the Accounts/Subscriptions row style; opening a folder shows a detail view with a thumbnail grid (`aspect-ratio: 1/1` cells) — images render as `<img>` thumbnails, videos show a film-strip icon placeholder. Clicking a thumbnail opens a modal showing the full image or an autoplaying `<video>` with controls.
+    - Right-click a folder row → Edit (name/description) or Delete (also cleans up all files inside from disk, not just the DB rows). Right-click a file thumbnail → Remove (deletes that one file from disk and its DB row).
+    - **Bug fixed:** pywebview's `create_file_dialog` file-type filter rejects `&` characters in the filter label (`"Images & Videos (...)"` threw `ValueError`) — renamed to `"Media Files (...)"`.
+    - **Bug fixed:** an in-conversation instruction to "replace this section of vault.js" was interpreted as replacing the *entire file* with just that section, silently deleting all Accounts/Subscriptions/notification code. Everything broke at once (no entries, can't switch tabs, notifications dead) with zero console errors, since the file was syntactically valid — just incomplete. Diagnosed via the Network tab showing `vault.js` still loading successfully while functionality was missing, pointing to file *content* rather than caching/path. **Rule going forward: always request/provide the complete `vault.js` file, never a "replace this section" instruction** — this file is large enough that a partial swap easily loses unrelated code silently.
+    - Also fixed along the way: a browser-cache issue where WebView2 served a stale cached `vault.js` (HTTP 304) after edits — fixed with a cache-busting query string (`vault.js?v=2`) on the `<script>` tag in `vault.html`; bump the version number after future `vault.js` edits if this recurs.
 
 ## Current Task
-Subscriptions feature (Privileges, hover-expand row, end date, notification bell, PHP amount) is fully built across items 17-20. **None of this has been tested or committed to Git yet.** This conversation is ending here; a new conversation will continue.
+Testing the Subscriptions feature end-to-end (add/edit/view/delete cycle including Privileges, custom fields, PHP amount, and the notification bell's 30/7/3/1-day triggers) — this was pending before the Images & Videos detour and is still outstanding. Images & Videos (Folders) has been built and tested; no known open issues there.
 
 ## Next Planned Step
-Immediate: test the complete Subscriptions feature end-to-end (add/edit/view/delete a subscription with plan, dates, amount, privileges, and custom fields; confirm the notification bell fires correctly at 30/7/3/1 days and shows the right amount; confirm no horizontal scroll/cutoff issues), clean up any test data, then `git add`/`commit`/`push`. After that: build out the two remaining empty sidebar sections (Images & Videos, Settings — no spec discussed yet for either). Longer-term: resume the original roadmap — Testing, Error Handling, Packaging, Final Security Review, v0.1.0 Release.
+1. Test the complete Subscriptions feature end-to-end, clean up any test data, then `git add`/`commit`/`push`.
+2. `git add`/`commit`/`push` the Images & Videos (Folders) feature, which has also not yet been committed.
+3. Build out the remaining empty sidebar section (Settings — no spec discussed yet).
+4. Longer-term: resume the original roadmap — Testing, Error Handling, Packaging, Final Security Review, v0.1.0 Release.
 
 ## Technology Stack
 - Language: Python 3.14.5
-- GUI: **transitioning from tkinter to pywebview** (HTML/CSS/JS rendered in a native desktop window via the system's web engine — Edge WebView2 on Windows). `pywebview` is installed. Old tkinter UI removed.
+- GUI: pywebview (HTML/CSS/JS rendered in a native desktop window via Edge WebView2 on Windows). Old tkinter UI fully removed.
 - Local storage: SQLite (built-in `sqlite3`), one database file per user account
-- Encryption: `cryptography` library (PBKDF2HMAC + Fernet/AES)
-- Packaging (planned, Step 19 of original numbering): PyInstaller
-- Explicitly local-only/offline by design — no cloud backend. (Live currency conversion via an external API was tried and reverted for Subscriptions amounts — see item 20 — reinforcing this design principle rather than breaking it.)
+- Encryption: `cryptography` library (PBKDF2HMAC + Fernet/AES) — used for account passwords/notes/custom fields; Subscriptions data and Folder media files are intentionally NOT encrypted (explicit per-feature decisions)
+- Packaging (planned): PyInstaller
+- Explicitly local-only/offline by design — no cloud backend. (Live currency conversion via an external API was tried and reverted for Subscriptions amounts, reinforcing this design principle.)
 
 ## Installed Dependencies (requirements.txt)
 - cryptography==50.0.0
@@ -134,68 +127,76 @@ Immediate: test the complete Subscriptions feature end-to-end (add/edit/view/del
 - pythonnet==3.1.0
 - pywebview==6.2.1
 - typing_extensions==4.16.0
-- python-dotenv (installed; verify exact pinned version is in `requirements.txt` next session — added via `pip install python-dotenv` but not yet reconfirmed via a fresh `pip freeze`)
-(all confirmed correctly added to `requirements.txt`; an earlier accidental self-referential `-e git+https://github.com/deculein14/Noctis.git...` line from `pip freeze` was manually removed)
+- python-dotenv (installed; verify exact pinned version is in `requirements.txt`)
+(an earlier accidental self-referential `-e git+https://...` line from `pip freeze` was manually removed)
 
 ## Bundled Assets
-- `src/noctis/web/fonts/Inter-Variable.ttf` — Inter variable font (all weights 100–900 in one file), fetched once from the Google Fonts GitHub mirror and committed to the repo so the app never needs internet access to render its own typeface.
+- `src/noctis/web/fonts/Inter-Variable.ttf` — Inter variable font (all weights 100–900 in one file), fetched from the Google Fonts GitHub mirror and committed to the repo so the app never needs internet access to render its own typeface.
 
 ## Important Decisions Made
 - Passwords and notes are always encrypted before touching the database; only metadata (title/account name, entry-username, category, timestamps, email) is stored in plain columns.
-- Master password is never stored anywhere, in any form, for any account — only a random salt and an indirect verification token are stored per-username in `users.json`.
-- Login identity is the **username**; email is collected at registration but used only as metadata for a possible future "forgot password" recovery feature — not for login. One email cannot be reused across multiple accounts.
+- Master password is never stored anywhere, in any form — only a random salt and an indirect verification token are stored per-username in `users.json`.
+- Login identity is the **username**; email is metadata only, used for a possible future recovery feature. One email cannot be reused across multiple accounts.
 - Master password minimum length: 5 characters, any characters allowed.
-- Explicitly and repeatedly declined: any form of recoverable/plaintext master password storage (including substitution ciphers and "temporary" logs). If a password-recovery convenience is wanted later, the correct approach is a one-time Recovery Key (like Bitwarden/1Password), not stored password text — this was proposed but not yet built.
+- Explicitly and repeatedly declined: any form of recoverable/plaintext master password storage. A future one-time Recovery Key (like Bitwarden/1Password) was proposed but not yet built.
 - Noctis supports multiple local accounts, each fully isolated: own salt, verification token, lockout state, and database file.
 - Considered and declined a Supabase/cloud backend to preserve the local-only, offline design.
-- Account entries now support arbitrary custom fields (encrypted), not just the fixed original field set.
-- Viewing an entry's real password requires re-entering the master password at that moment (re-authentication), even though the vault is already unlocked — an extra safeguard against casually exposing passwords on screen. This check applies only to the password field itself, not notes or custom fields.
-- Editing an entry (from the View screen) also requires master-password re-authentication before the edit form opens.
-- Deleting an entry requires an explicit confirmation popup ("This cannot be undone") — no longer deletes on a single click.
-- Multiple accounts can share the same account name (e.g. two "Facebook" logins) and are grouped together in the list, distinguished by their Notes field (e.g. "Main acc" / "Alt acc").
-- Email addresses are now verified at registration via a one-time 6-digit code sent through the user's own Gmail account — this is Noctis's first and only feature requiring internet access; all other functionality (login, vault CRUD) remains fully offline.
+- Viewing an entry's real password requires re-entering the master password at that moment, even though the vault is already unlocked. Applies only to the password field, not notes or custom fields.
+- Editing/Deleting an entry (from the View screen) also requires master-password re-authentication / confirmation popup respectively.
+- Multiple accounts can share the same account name and are grouped together in the list.
+- Email addresses are verified at registration via a one-time 6-digit code sent through the user's own Gmail account — Noctis's only feature requiring internet access.
 - GitHub repository is public (changed from private after verifying, via full Git history search, that no secrets were ever committed).
-- Subscriptions support two parallel "extra info" mechanisms: user-labeled custom fields (Add Field, for one-off info) and a fixed, label-less Privileges bullet list (for perks) — both coexist, neither replaces the other.
-- Subscription list rows have no dedicated "View" button; the entire row is clickable/keyboard-accessible and opens the detail screen directly, with a hover/focus-triggered inline preview of privileges.
-- Subscription amounts are entered and stored directly in PHP (peso) — no currency selection, no live conversion, reaffirming the offline-first principle after a live-conversion attempt was tried and reverted.
-- The renewal notification bell is a fixed, window-level UI element (not scoped to the Subscriptions sidebar section) so upcoming renewals are visible from anywhere in the app.
+- Subscriptions support two parallel "extra info" mechanisms: user-labeled custom fields and a fixed, label-less Privileges bullet list — both coexist.
+- Subscription list rows have no dedicated "View" button; the entire row is clickable and opens the detail screen directly, with a hover/focus-triggered inline preview of privileges.
+- Subscription amounts are entered/stored directly in PHP — no currency selection, no live conversion, reaffirming the offline-first principle.
+- The renewal notification bell is a fixed, window-level UI element, visible from anywhere in the app.
+- Images & Videos folders require master-password re-authentication to *open* (view contents), but folder metadata (name/description) itself is plain, unencrypted, and freely listable/editable — mirroring the Subscriptions precedent that not everything needs encryption, but sensitive *access* can still be gated.
+- Inserted media files are **moved** (not copied) from their original location into Noctis's own per-user storage folder, so Noctis becomes the only copy and the original location no longer has the file. Files are stored unencrypted on disk — an explicit trade-off for simplicity and instant view/playback, accepted after discussing that encryption would require decrypt-to-temp-file complexity, especially for video playback.
 
 ## Known Issues
-None currently. (The horizontal-scroll/content-cutoff bug from notification navigation, described under item 19, has been fixed — flagged here as resolved, not outstanding.)
+None currently outstanding for built features. (Previously flagged horizontal-scroll/content-cutoff bug from notification navigation has been fixed; previously flagged base64/`file:///` media display bug has been fixed; previously flagged stale-cache and partial-file-replacement incidents during the Folders build have been fixed and their lessons documented above.)
 
 ## Important Unfinished Work
-- Planned future enhancement (not yet scheduled to a specific step): email alert to a Gmail address after 5 failed master-password attempts. Now technically easier since Gmail-sending infrastructure (`smtplib` + App Password) already exists from the email verification feature — could reuse `security.py`'s email-sending pattern.
-- Planned future enhancement (proposed, not yet built): one-time Recovery Key system generated at registration, as the safe answer to "forgot master password," and groundwork for a future recovery flow. Now more feasible than before since email delivery infrastructure exists — a recovery key or reset link could be emailed the same way verification codes are.
-- Known/accepted limitations (not planned to be fully solved): no OS-level file permission hardening on per-user `.db` files or `users.json`; in-memory encryption key is set to None on lock but not guaranteed to be wiped from RAM immediately (relies on Python garbage collection).
+- Subscriptions feature has not yet been tested end-to-end or committed to Git — this is the immediate next task.
+- Images & Videos (Folders) feature has been built and tested but not yet committed to Git.
+- Planned future enhancement (not yet scheduled): email alert to a Gmail address after 5 failed master-password attempts — technically easier now since Gmail-sending infrastructure already exists.
+- Planned future enhancement (proposed, not yet built): one-time Recovery Key system generated at registration, as the safe answer to "forgot master password."
+- Known/accepted limitations (not planned to be fully solved): no OS-level file permission hardening on per-user `.db` files, `users.json`, or the `media_<username>` folders; in-memory encryption key is set to None on lock but not guaranteed to be wiped from RAM immediately.
 - `config.DATABASE_FILENAME` in `config.py` is unused (superseded by per-user filenames) — harmless leftover.
-- Edit mode for existing accounts uses a single combined screen (fields + category together) rather than the two-step wizard used for creation — an intentional simplification, not a bug.
-- If a user abandons registration after requesting a code but before entering it, that pending verification sits in `pending_verifications.json` until its 10-minute expiry — harmless (never becomes an account, file is git-ignored) but not actively cleaned up early.
-- Leftover unused `currency`/`php_amount` columns in the `subscriptions` table from the abandoned live-currency-conversion attempt (item 20) — harmless, not actively cleaned up.
+- Edit mode for existing accounts uses a single combined screen rather than the two-step wizard used for creation — intentional simplification, not a bug.
+- If a user abandons registration after requesting a code but before entering it, that pending verification sits in `pending_verifications.json` until its 10-minute expiry — harmless but not actively cleaned up early.
+- Leftover unused `currency`/`php_amount` columns in the `subscriptions` table from the abandoned live-currency-conversion attempt — harmless, not actively cleaned up.
+- Large video files inserted into Folders may feel slow to open due to base64 encoding overhead — acceptable for now; revisit if it becomes a real problem (e.g. switch to pywebview's HTTP server mode for serving local files directly instead of base64).
+- Settings sidebar section is still an empty placeholder — no spec discussed yet.
 
 ## Architecture Changes
-- Multi-User Login/Vaults — changed from a single global vault to per-username accounts with isolated storage (salt, verification token, lockout state, database file per user).
-- Account creation UX — replaced the single flat "Add Entry" form with a "+" → Category/Account choice, a richer account form (email, notes, custom fields), and a separate category-selection step before saving.
-- Database schema — `entries` table extended (email, encrypted_notes); new `categories` and `custom_fields` tables added to support the above.
-- UI framework — migrated from tkinter to pywebview + HTML/CSS/JS (see item 1-13 above under Completed Steps for the full migration history and the critical `window.load_url()` freeze-bug lesson).
-- Layout — moved from a single-page vault view to a persistent sidebar with multiple sections (Accounts, Subscriptions, Images & Videos, Settings), each independently loadable.
-- Database schema (second wave) — added `subscriptions` and `subscription_fields` tables alongside the original `entries`/`categories`/`custom_fields`, for a second, differently-modeled feature (plain text, no encryption, no re-auth) within the same per-user `.db` file.
-- Database schema (third wave) — added `subscription_privileges` table alongside `subscription_fields`, giving Subscriptions two parallel "extra info" mechanisms: user-labeled custom fields (Add Field) and a fixed, label-less bullet list (Privileges).
-- Subscriptions list UX — removed the row-level "View" button in favor of making the entire row clickable/keyboard-accessible, with a hover/focus-triggered inline preview of privileges (CSS-only expand, no extra API call per hover).
-- Global notification system — introduced a window-level (not section-scoped) renewal-reminder bell, computed entirely client-side from existing `get_subscriptions` data; added a shared `activateSection()` helper so both sidebar clicks and notification clicks route through the same section-switching logic.
-- Layout robustness — added global `overflow-x: hidden` and a `resetScroll()` helper invoked on every view transition, to prevent horizontal-scroll content clipping across the whole app, not just the Subscriptions section.
-- Database schema (fourth wave) — added an `amount` column (`REAL`) to `subscriptions` for direct PHP entry; a prior attempt added `currency`/`php_amount` columns for live conversion, which were left in place but are now unused after that approach was reverted.
+- Multi-User Login/Vaults — changed from a single global vault to per-username accounts with isolated storage.
+- Account creation UX — replaced the single flat "Add Entry" form with a "+" → Category/Account choice, richer account form, separate category-selection step.
+- Database schema — `entries` table extended (email, encrypted_notes); new `categories` and `custom_fields` tables.
+- UI framework — migrated from tkinter to pywebview + HTML/CSS/JS.
+- Layout — moved from a single-page vault view to a persistent sidebar with multiple sections (Accounts, Subscriptions, Images & Videos, Settings).
+- Database schema (second wave) — added `subscriptions` and `subscription_fields` tables.
+- Database schema (third wave) — added `subscription_privileges` table.
+- Subscriptions list UX — removed the row-level "View" button in favor of a fully clickable/keyboard-accessible row with hover/focus-triggered privilege preview.
+- Global notification system — window-level (not section-scoped) renewal-reminder bell, computed client-side; shared `activateSection()` helper for sidebar clicks and notification clicks.
+- Layout robustness — global `overflow-x: hidden` and a `resetScroll()` helper on every view transition.
+- Database schema (fourth wave) — added an `amount` column (REAL) to `subscriptions` for direct PHP entry; unused `currency`/`php_amount` columns left in place from an abandoned live-conversion attempt.
+- Images & Videos (Folders) — new `folders` and `folder_files` tables; new `security.get_media_directory()` helper; new per-user on-disk media storage (`media_<username>/<folder_id>/`) separate from the SQLite `.db` file; media served to the frontend as base64 data URLs rather than file paths, to work around a WebView2 restriction on loading local `file:///` resources.
 
 ---
 
 ## Handoff Notes for a New Conversation
 
-This project has grown a long conversation history. To keep future sessions fast and cheap (token cost scales with total conversation length, not just the size of what you type), work is continuing in a **fresh conversation** starting now.
+This project has grown a long conversation history. To keep future sessions fast and cheap, work continues in fresh conversations as needed.
 
-**What to do when starting that new conversation:**
+**What to do when starting a new conversation:**
 1. Paste this entire `PROJECT_STATUS.md` file as your first message.
-2. Optionally, also paste the current `style.css` and `vault.css` content if the first task involves visual/theme work — these are foundational and small enough to include upfront.
-3. For anything else (`vault.js`, `main.py`, `security.py`, `database.py`, `login.js`, `login.html`, `vault.html`), **do not paste them preemptively** — per this project's own "Current Code Only" rule (established early in the original conversation), Claude should ask for a file's current content before editing it, and you should just paste whatever's asked for. This avoids the new conversation growing bloated with files that aren't relevant to the immediate task.
-4. The very first real task in the new conversation should be: **test the complete Subscriptions feature** (add/edit/view/delete cycle including Privileges, custom fields, PHP amount, and the notification bell's 30/7/3/1-day triggers), clean up test data, then `git add`/`commit`/`push`. Everything needed to do this is already built — see items 17-20 above.
-5. `resizable=False` and the 1200×800 fixed window size are already set in `main.py` — no need to redo this.
-6. The design system (dark theme, Inter font, SVG icon set, spacing/color tokens) is fully established in `style.css`/`vault.css` — a new session should ask to see these before making any visual changes, rather than guessing colors/spacing.
-7. The notification bell is `position: fixed` at the top-right of the whole window (not inside the sidebar) — if any future layout change touches the sidebar or header, keep this in mind so the bell isn't accidentally reparented back into a cramped container.
+2. Optionally, also paste the current `style.css` and `vault.css` content if the first task involves visual/theme work.
+3. For anything else (`vault.js`, `main.py`, `security.py`, `database.py`, `login.js`, `login.html`, `vault.html`), do NOT paste them preemptively — per this project's "Current Code Only" rule, Claude should ask for a file's current content before editing it.
+4. **`vault.js` is now large enough that partial "replace this section" instructions are risky** — always request/provide the complete file for this one specifically, per the incident documented under Images & Videos above.
+5. The immediate next real tasks are: (a) test the Subscriptions feature end-to-end and commit it, (b) commit the Images & Videos (Folders) feature, both currently uncommitted.
+6. `resizable=False` and the 1200×800 fixed window size are already set in `main.py` — no need to redo this.
+7. The design system (dark theme, Inter font, SVG icon set, spacing/color tokens) is fully established in `style.css`/`vault.css` — ask to see these before making visual changes, rather than guessing.
+8. The notification bell is `position: fixed` at the top-right of the whole window (not inside the sidebar) — keep this in mind for any future sidebar/header layout changes.
+9. If `vault.js` seems to be missing functionality that should exist (e.g. entries not loading, tabs not switching), check whether the file is actually complete before debugging further — this exact failure mode has happened before (see Images & Videos bug notes above) and looks like "everything is broken" with no console errors.
+10. `vault.html`'s `<script src="vault.js?v=2">` cache-busting tag should have its version number bumped any time `vault.js` is updated, to avoid WebView2 serving a stale cached copy (HTTP 304).
