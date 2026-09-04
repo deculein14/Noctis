@@ -1,7 +1,7 @@
 # Noctis — Project Status
 
 ## Current Step
-Images & Videos section (Folders) is built and tested. This followed the pywebview UI migration (see Completed Steps 1-21) and the Subscriptions feature build-out. Testing the Subscriptions feature end-to-end is still pending from before the Images & Videos detour.
+Images & Videos section (Folders) is built and tested. Subscriptions feature has been extended with Mark as Done / payment history. This followed the pywebview UI migration (see Completed Steps 1-21) and the Subscriptions feature build-out. Testing the Subscriptions feature end-to-end is still pending.
 
 ### Why the pywebview pivot happened (background)
 User wanted real CSS animations/hover transitions, which tkinter cannot do (no animation/transition system). Confirmed via a working pywebview proof-of-concept before committing to the migration. This aligns Noctis's stack with how real commercial password managers (1Password, Bitwarden) build their desktop UIs (HTML/CSS/JS wrapped in a native window), using a lighter Python-friendly tool (pywebview) instead of Electron/Node.js.
@@ -44,6 +44,15 @@ User wanted real CSS animations/hover transitions, which tkinter cannot do (no a
     - Delete requires a second confirmation popup before removing an entry.
     - Edit (from the View screen) also requires re-entering the master password.
     - Grouped accounts: entries sharing the same account name collapse into a single list row ("N accounts"); a sub-list shows each individually labeled account, each with its own Favorite toggle and View button.
+22. Subscriptions — Mark as Done & Payment History:
+    - New `subscription_payments` table (`database.py`): logs `subscription_id`, `months_paid`, `previous_due_date`, `new_due_date`, `paid_at` per payment.
+    - `database.mark_subscription_paid(username, subscription_id, months_paid)` advances the subscription's existing `date_ended` forward by N months (calendar-safe — e.g. Jan 31 + 1 month lands on Feb 28/29 correctly), calculated from the subscription's own due date (not today's date), and logs the payment in the same transaction.
+    - `main.py` API: `mark_subscription_paid` (validates months ≥ 1, surfaces a friendly error if the subscription has no due date set) and `get_subscription_payments`.
+    - `vault.js`: "Mark as Done" button on the Subscription detail view opens a small modal asking how many months were paid (default 1); a "Payment History" section lists past payments (months paid, previous → new due date), newest first.
+    - Notification dropdown behavior unchanged by design — clicking a due subscription still just navigates to its detail page; marking as paid happens there, not from the dropdown.
+    - "Date Availed" / "Date Ended" on the Subscription detail view now display with the month spelled out (e.g. "Aug 31, 2026") via the existing `formatDateForDisplay()` helper, instead of raw `YYYY-MM-DD`. The Edit form's date inputs still use the raw ISO format internally (required by HTML `<input type="date">`).
+    - `vault.html` cache-busting tag bumped to `vault.js?v=4`.
+    - `main.py`: `webview.start(debug=True)` changed to `debug=False` — DevTools no longer opens automatically on launch.
 
 ### pywebview UI migration (superseded tkinter — items below happened in sequence)
 1. Project structure for the web UI: `src/noctis/web/` folder created; `main.py` rebuilt with a pywebview `Api` class bridging JS calls to `security.py`.
@@ -98,20 +107,20 @@ User wanted real CSS animations/hover transitions, which tkinter cannot do (no a
     - Right-click a folder row → Edit (name/description) or Delete (also cleans up all files inside from disk, not just the DB rows). Right-click a file thumbnail → Remove (deletes that one file from disk and its DB row).
     - **Bug fixed:** pywebview's `create_file_dialog` file-type filter rejects `&` characters in the filter label (`"Images & Videos (...)"` threw `ValueError`) — renamed to `"Media Files (...)"`.
     - **Bug fixed:** an in-conversation instruction to "replace this section of vault.js" was interpreted as replacing the *entire file* with just that section, silently deleting all Accounts/Subscriptions/notification code. Everything broke at once (no entries, can't switch tabs, notifications dead) with zero console errors, since the file was syntactically valid — just incomplete. Diagnosed via the Network tab showing `vault.js` still loading successfully while functionality was missing, pointing to file *content* rather than caching/path. **Rule going forward: always request/provide the complete `vault.js` file, never a "replace this section" instruction** — this file is large enough that a partial swap easily loses unrelated code silently.
-    - Also fixed along the way: a browser-cache issue where WebView2 served a stale cached `vault.js` (HTTP 304) after edits — fixed with a cache-busting query string (`vault.js?v=2`) on the `<script>` tag in `vault.html`; bump the version number after future `vault.js` edits if this recurs.
+    - Also fixed along the way: a browser-cache issue where WebView2 served a stale cached `vault.js` (HTTP 304) after edits — fixed with a cache-busting query string (`vault.js?v=2`) on the `<script>` tag in `vault.html`; bump the version number after future `vault.js` edits if this recurs. (Now at `v=4` — see Completed Step 22.)
 
 ## Current Task
-Testing the Subscriptions feature end-to-end (add/edit/view/delete cycle including Privileges, custom fields, PHP amount, and the notification bell's 30/7/3/1-day triggers) — this was pending before the Images & Videos detour and is still outstanding. Images & Videos (Folders) has been built and tested; no known open issues there.
+Testing the Subscriptions feature end-to-end (add/edit/view/delete cycle including Privileges, custom fields, PHP amount, Mark as Done/payment history, and the notification bell's 30/7/3/1-day triggers) — still outstanding, now includes the newly added Mark as Done feature.
 
 ## Next Planned Step
-1. Test the complete Subscriptions feature end-to-end, clean up any test data, then `git add`/`commit`/`push`.
+1. Test the complete Subscriptions feature end-to-end (including Mark as Done / payment history), clean up any test data, then `git add`/`commit`/`push`.
 2. `git add`/`commit`/`push` the Images & Videos (Folders) feature, which has also not yet been committed.
 3. Build out the remaining empty sidebar section (Settings — no spec discussed yet).
 4. Longer-term: resume the original roadmap — Testing, Error Handling, Packaging, Final Security Review, v0.1.0 Release.
 
 ## Technology Stack
 - Language: Python 3.14.5
-- GUI: pywebview (HTML/CSS/JS rendered in a native desktop window via Edge WebView2 on Windows). Old tkinter UI fully removed.
+- GUI: pywebview (HTML/CSS/JS rendered in a native desktop window via Edge WebView2 on Windows). Old tkinter UI fully removed. DevTools auto-open disabled (`webview.start(debug=False)`).
 - Local storage: SQLite (built-in `sqlite3`), one database file per user account
 - Encryption: `cryptography` library (PBKDF2HMAC + Fernet/AES) — used for account passwords/notes/custom fields; Subscriptions data and Folder media files are intentionally NOT encrypted (explicit per-feature decisions)
 - Packaging (planned): PyInstaller
@@ -152,12 +161,13 @@ Testing the Subscriptions feature end-to-end (add/edit/view/delete cycle includi
 - The renewal notification bell is a fixed, window-level UI element, visible from anywhere in the app.
 - Images & Videos folders require master-password re-authentication to *open* (view contents), but folder metadata (name/description) itself is plain, unencrypted, and freely listable/editable — mirroring the Subscriptions precedent that not everything needs encryption, but sensitive *access* can still be gated.
 - Inserted media files are **moved** (not copied) from their original location into Noctis's own per-user storage folder, so Noctis becomes the only copy and the original location no longer has the file. Files are stored unencrypted on disk — an explicit trade-off for simplicity and instant view/playback, accepted after discussing that encryption would require decrypt-to-temp-file complexity, especially for video playback.
+- Subscription "Mark as Done" advances the due date from the subscription's own current due date (not from today), so the billing schedule stays consistent even if logged a few days late; each payment is logged in a permanent history list rather than silently overwriting the date.
 
 ## Known Issues
 None currently outstanding for built features. (Previously flagged horizontal-scroll/content-cutoff bug from notification navigation has been fixed; previously flagged base64/`file:///` media display bug has been fixed; previously flagged stale-cache and partial-file-replacement incidents during the Folders build have been fixed and their lessons documented above.)
 
 ## Important Unfinished Work
-- Subscriptions feature has not yet been tested end-to-end or committed to Git — this is the immediate next task.
+- Subscriptions feature (including the new Mark as Done / payment history addition) has not yet been tested end-to-end or committed to Git — this is the immediate next task.
 - Images & Videos (Folders) feature has been built and tested but not yet committed to Git.
 - Planned future enhancement (not yet scheduled): email alert to a Gmail address after 5 failed master-password attempts — technically easier now since Gmail-sending infrastructure already exists.
 - Planned future enhancement (proposed, not yet built): one-time Recovery Key system generated at registration, as the safe answer to "forgot master password."
@@ -182,6 +192,7 @@ None currently outstanding for built features. (Previously flagged horizontal-sc
 - Layout robustness — global `overflow-x: hidden` and a `resetScroll()` helper on every view transition.
 - Database schema (fourth wave) — added an `amount` column (REAL) to `subscriptions` for direct PHP entry; unused `currency`/`php_amount` columns left in place from an abandoned live-conversion attempt.
 - Images & Videos (Folders) — new `folders` and `folder_files` tables; new `security.get_media_directory()` helper; new per-user on-disk media storage (`media_<username>/<folder_id>/`) separate from the SQLite `.db` file; media served to the frontend as base64 data URLs rather than file paths, to work around a WebView2 restriction on loading local `file:///` resources.
+- Database schema (fifth wave) — added a `subscription_payments` table logging each "Mark as Done" action against a subscription.
 
 ---
 
@@ -194,9 +205,10 @@ This project has grown a long conversation history. To keep future sessions fast
 2. Optionally, also paste the current `style.css` and `vault.css` content if the first task involves visual/theme work.
 3. For anything else (`vault.js`, `main.py`, `security.py`, `database.py`, `login.js`, `login.html`, `vault.html`), do NOT paste them preemptively — per this project's "Current Code Only" rule, Claude should ask for a file's current content before editing it.
 4. **`vault.js` is now large enough that partial "replace this section" instructions are risky** — always request/provide the complete file for this one specifically, per the incident documented under Images & Videos above.
-5. The immediate next real tasks are: (a) test the Subscriptions feature end-to-end and commit it, (b) commit the Images & Videos (Folders) feature, both currently uncommitted.
-6. `resizable=False` and the 1200×800 fixed window size are already set in `main.py` — no need to redo this.
+5. The immediate next real tasks are: (a) test the Subscriptions feature end-to-end (including Mark as Done / payment history) and commit it, (b) commit the Images & Videos (Folders) feature, both currently uncommitted.
+6. `resizable=False` and the 1200×800 fixed window size are already set in `main.py` — no need to redo this. DevTools no longer auto-opens (`debug=False`).
 7. The design system (dark theme, Inter font, SVG icon set, spacing/color tokens) is fully established in `style.css`/`vault.css` — ask to see these before making visual changes, rather than guessing.
 8. The notification bell is `position: fixed` at the top-right of the whole window (not inside the sidebar) — keep this in mind for any future sidebar/header layout changes.
 9. If `vault.js` seems to be missing functionality that should exist (e.g. entries not loading, tabs not switching), check whether the file is actually complete before debugging further — this exact failure mode has happened before (see Images & Videos bug notes above) and looks like "everything is broken" with no console errors.
-10. `vault.html`'s `<script src="vault.js?v=2">` cache-busting tag should have its version number bumped any time `vault.js` is updated, to avoid WebView2 serving a stale cached copy (HTTP 304).
+10. `vault.html`'s `<script src="vault.js?v=4">` cache-busting tag should have its version number bumped any time `vault.js` is updated, to avoid WebView2 serving a stale cached copy (HTTP 304).
+11. Subscription dates ("Date Availed"/"Date Ended") are stored as raw `YYYY-MM-DD` text in the database and in the Edit form's `<input type="date">` fields, but are displayed to the user with the month spelled out (e.g. "Aug 31, 2026") via `formatDateForDisplay()` wherever shown read-only (list rows, detail view, payment history, notification dropdown).
