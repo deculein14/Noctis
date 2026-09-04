@@ -1,7 +1,7 @@
 # Noctis — Project Status
 
 ## Current Step
-Images & Videos section (Folders) is built and tested. Subscriptions feature has been extended with Mark as Done / payment history. This followed the pywebview UI migration (see Completed Steps 1-21) and the Subscriptions feature build-out. Testing the Subscriptions feature end-to-end is still pending.
+Images & Videos section (Folders) is built and tested. Subscriptions feature has been extended with Mark as Done / payment history. Enter-to-next-field navigation added across all forms. Window centering fixed. This followed the pywebview UI migration (see Completed Steps 1-21) and the Subscriptions feature build-out. Testing the Subscriptions feature end-to-end is still pending.
 
 ### Why the pywebview pivot happened (background)
 User wanted real CSS animations/hover transitions, which tkinter cannot do (no animation/transition system). Confirmed via a working pywebview proof-of-concept before committing to the migration. This aligns Noctis's stack with how real commercial password managers (1Password, Bitwarden) build their desktop UIs (HTML/CSS/JS wrapped in a native window), using a lighter Python-friendly tool (pywebview) instead of Electron/Node.js.
@@ -53,6 +53,15 @@ User wanted real CSS animations/hover transitions, which tkinter cannot do (no a
     - "Date Availed" / "Date Ended" on the Subscription detail view now display with the month spelled out (e.g. "Aug 31, 2026") via the existing `formatDateForDisplay()` helper, instead of raw `YYYY-MM-DD`. The Edit form's date inputs still use the raw ISO format internally (required by HTML `<input type="date">`).
     - `vault.html` cache-busting tag bumped to `vault.js?v=4`.
     - `main.py`: `webview.start(debug=True)` changed to `debug=False` — DevTools no longer opens automatically on launch.
+23. Enter-to-next-field navigation across all forms:
+    - `vault.js`: a single delegated `handleModalEnterKey` listener on `modalBox` covers every modal form (Account, Subscription, Folder, Category, master-password prompt, months-paid prompt). Enter in a text-like field moves focus to the next eligible field in DOM order; Enter on the last field clicks that modal's `.modal-primary` button. Re-queries the DOM on every keypress, so dynamically added fields (custom fields, privileges) are included automatically with no extra wiring. Replaced the two prior one-off Enter handlers (master password, months paid) since the general listener now covers them.
+    - `login.js`: equivalent per-mode field ordering (`getFieldOrder()` / `handleEnterNavigation`) — login: username → password; register: email → username → password → confirm password; awaiting_code: code field. Enter on the last field of the current mode submits, same as clicking the submit button.
+    - `vault.html` cache-busting tag bumped to `vault.js?v=5`.
+24. Window centering fix:
+    - Root cause: `main.py` manually computed `x`/`y` from `webview.screens[0]`, but (a) `Screen` objects have an `x`/`y` origin offset that was being ignored, and (b) `screens[0]` isn't reliably the actual primary/active display on a multi-monitor setup — enumeration order isn't guaranteed.
+    - Fix: `main.py` now selects the screen whose origin is `(0, 0)` (`_get_primary_screen()`) and passes it via pywebview's built-in `screen=` parameter to `create_window`, letting pywebview's own DPI-aware centering math (which correctly accounts for screen offset) handle placement, instead of computing `x`/`y` manually.
+    - Along the way, discovered `config.py`'s `WINDOW_WIDTH`/`WINDOW_HEIGHT` (620×780) were stale leftovers never actually read by `main.py` (which hardcoded 1200×800 directly). Fixed both: `config.py` values corrected to `1200`/`800` to match the app's real size, and `main.py` now imports `config` and uses `config.WINDOW_WIDTH`, `config.WINDOW_HEIGHT`, `config.APP_NAME` instead of hardcoded literals — config.py is now the single source of truth for window sizing.
+    - Confirmed fixed and centers correctly on the user's dual-monitor (laptop + extended monitor) setup.
 
 ### pywebview UI migration (superseded tkinter — items below happened in sequence)
 1. Project structure for the web UI: `src/noctis/web/` folder created; `main.py` rebuilt with a pywebview `Api` class bridging JS calls to `security.py`.
@@ -107,20 +116,21 @@ User wanted real CSS animations/hover transitions, which tkinter cannot do (no a
     - Right-click a folder row → Edit (name/description) or Delete (also cleans up all files inside from disk, not just the DB rows). Right-click a file thumbnail → Remove (deletes that one file from disk and its DB row).
     - **Bug fixed:** pywebview's `create_file_dialog` file-type filter rejects `&` characters in the filter label (`"Images & Videos (...)"` threw `ValueError`) — renamed to `"Media Files (...)"`.
     - **Bug fixed:** an in-conversation instruction to "replace this section of vault.js" was interpreted as replacing the *entire file* with just that section, silently deleting all Accounts/Subscriptions/notification code. Everything broke at once (no entries, can't switch tabs, notifications dead) with zero console errors, since the file was syntactically valid — just incomplete. Diagnosed via the Network tab showing `vault.js` still loading successfully while functionality was missing, pointing to file *content* rather than caching/path. **Rule going forward: always request/provide the complete `vault.js` file, never a "replace this section" instruction** — this file is large enough that a partial swap easily loses unrelated code silently.
-    - Also fixed along the way: a browser-cache issue where WebView2 served a stale cached `vault.js` (HTTP 304) after edits — fixed with a cache-busting query string (`vault.js?v=2`) on the `<script>` tag in `vault.html`; bump the version number after future `vault.js` edits if this recurs. (Now at `v=4` — see Completed Step 22.)
+    - Also fixed along the way: a browser-cache issue where WebView2 served a stale cached `vault.js` (HTTP 304) after edits — fixed with a cache-busting query string (`vault.js?v=2`) on the `<script>` tag in `vault.html`; bump the version number after future `vault.js` edits if this recurs. (Now at `v=5` — see Completed Steps 22-23. Was missed once, briefly, between v4 and v5 — see Handoff Notes.)
 
 ## Current Task
-Testing the Subscriptions feature end-to-end (add/edit/view/delete cycle including Privileges, custom fields, PHP amount, Mark as Done/payment history, and the notification bell's 30/7/3/1-day triggers) — still outstanding, now includes the newly added Mark as Done feature.
+Testing the Subscriptions feature end-to-end (add/edit/view/delete cycle including Privileges, custom fields, PHP amount, Mark as Done/payment history, and the notification bell's 30/7/3/1-day triggers) — still outstanding.
 
 ## Next Planned Step
 1. Test the complete Subscriptions feature end-to-end (including Mark as Done / payment history), clean up any test data, then `git add`/`commit`/`push`.
 2. `git add`/`commit`/`push` the Images & Videos (Folders) feature, which has also not yet been committed.
-3. Build out the remaining empty sidebar section (Settings — no spec discussed yet).
-4. Longer-term: resume the original roadmap — Testing, Error Handling, Packaging, Final Security Review, v0.1.0 Release.
+3. `git add`/`commit`/`push` the Enter-to-next-field navigation and window centering fixes, which have also not yet been committed.
+4. Build out the remaining empty sidebar section (Settings — no spec discussed yet).
+5. Longer-term: resume the original roadmap — Testing, Error Handling, Packaging, Final Security Review, v0.1.0 Release.
 
 ## Technology Stack
 - Language: Python 3.14.5
-- GUI: pywebview (HTML/CSS/JS rendered in a native desktop window via Edge WebView2 on Windows). Old tkinter UI fully removed. DevTools auto-open disabled (`webview.start(debug=False)`).
+- GUI: pywebview (HTML/CSS/JS rendered in a native desktop window via Edge WebView2 on Windows). Old tkinter UI fully removed. DevTools auto-open disabled (`webview.start(debug=False)`). Window centers correctly on multi-monitor setups via pywebview's built-in `screen=` parameter, targeting the display at origin `(0,0)`.
 - Local storage: SQLite (built-in `sqlite3`), one database file per user account
 - Encryption: `cryptography` library (PBKDF2HMAC + Fernet/AES) — used for account passwords/notes/custom fields; Subscriptions data and Folder media files are intentionally NOT encrypted (explicit per-feature decisions)
 - Packaging (planned): PyInstaller
@@ -162,22 +172,24 @@ Testing the Subscriptions feature end-to-end (add/edit/view/delete cycle includi
 - Images & Videos folders require master-password re-authentication to *open* (view contents), but folder metadata (name/description) itself is plain, unencrypted, and freely listable/editable — mirroring the Subscriptions precedent that not everything needs encryption, but sensitive *access* can still be gated.
 - Inserted media files are **moved** (not copied) from their original location into Noctis's own per-user storage folder, so Noctis becomes the only copy and the original location no longer has the file. Files are stored unencrypted on disk — an explicit trade-off for simplicity and instant view/playback, accepted after discussing that encryption would require decrypt-to-temp-file complexity, especially for video playback.
 - Subscription "Mark as Done" advances the due date from the subscription's own current due date (not from today), so the billing schedule stays consistent even if logged a few days late; each payment is logged in a permanent history list rather than silently overwriting the date.
+- Window size is defined once in `config.py` (`WINDOW_WIDTH`/`WINDOW_HEIGHT`) and read by `main.py`, rather than hardcoded separately in both places — avoids the two values silently drifting out of sync (as `config.py` previously had, unnoticed, with stale 620×780 values while the app actually ran at 1200×800).
 
 ## Known Issues
-None currently outstanding for built features. (Previously flagged horizontal-scroll/content-cutoff bug from notification navigation has been fixed; previously flagged base64/`file:///` media display bug has been fixed; previously flagged stale-cache and partial-file-replacement incidents during the Folders build have been fixed and their lessons documented above.)
+None currently outstanding for built features. (Previously flagged horizontal-scroll/content-cutoff bug from notification navigation has been fixed; previously flagged base64/`file:///` media display bug has been fixed; previously flagged stale-cache and partial-file-replacement incidents during the Folders build have been fixed and their lessons documented above; window centering bug on multi-monitor setups has been fixed.)
 
 ## Important Unfinished Work
-- Subscriptions feature (including the new Mark as Done / payment history addition) has not yet been tested end-to-end or committed to Git — this is the immediate next task.
+- Subscriptions feature (including the Mark as Done / payment history addition) has not yet been tested end-to-end or committed to Git — this is the immediate next task.
 - Images & Videos (Folders) feature has been built and tested but not yet committed to Git.
+- Enter-to-next-field navigation and window centering/config.py fixes have been built and tested but not yet committed to Git.
 - Planned future enhancement (not yet scheduled): email alert to a Gmail address after 5 failed master-password attempts — technically easier now since Gmail-sending infrastructure already exists.
 - Planned future enhancement (proposed, not yet built): one-time Recovery Key system generated at registration, as the safe answer to "forgot master password."
 - Known/accepted limitations (not planned to be fully solved): no OS-level file permission hardening on per-user `.db` files, `users.json`, or the `media_<username>` folders; in-memory encryption key is set to None on lock but not guaranteed to be wiped from RAM immediately.
-- `config.DATABASE_FILENAME` in `config.py` is unused (superseded by per-user filenames) — harmless leftover.
 - Edit mode for existing accounts uses a single combined screen rather than the two-step wizard used for creation — intentional simplification, not a bug.
 - If a user abandons registration after requesting a code but before entering it, that pending verification sits in `pending_verifications.json` until its 10-minute expiry — harmless but not actively cleaned up early.
 - Leftover unused `currency`/`php_amount` columns in the `subscriptions` table from the abandoned live-currency-conversion attempt — harmless, not actively cleaned up.
 - Large video files inserted into Folders may feel slow to open due to base64 encoding overhead — acceptable for now; revisit if it becomes a real problem (e.g. switch to pywebview's HTTP server mode for serving local files directly instead of base64).
 - Settings sidebar section is still an empty placeholder — no spec discussed yet.
+- `WINDOW_MIN_WIDTH`/`WINDOW_MIN_HEIGHT` in `config.py` remain unused since the window is non-resizable (`resizable=False`) — harmless, kept for potential future use if resizing is ever enabled.
 
 ## Architecture Changes
 - Multi-User Login/Vaults — changed from a single global vault to per-username accounts with isolated storage.
@@ -193,6 +205,8 @@ None currently outstanding for built features. (Previously flagged horizontal-sc
 - Database schema (fourth wave) — added an `amount` column (REAL) to `subscriptions` for direct PHP entry; unused `currency`/`php_amount` columns left in place from an abandoned live-conversion attempt.
 - Images & Videos (Folders) — new `folders` and `folder_files` tables; new `security.get_media_directory()` helper; new per-user on-disk media storage (`media_<username>/<folder_id>/`) separate from the SQLite `.db` file; media served to the frontend as base64 data URLs rather than file paths, to work around a WebView2 restriction on loading local `file:///` resources.
 - Database schema (fifth wave) — added a `subscription_payments` table logging each "Mark as Done" action against a subscription.
+- Form UX — unified Enter-key field navigation across every modal form (`vault.js`) and the login/register page (`login.js`), replacing ad-hoc single-field Enter handlers with one general mechanism each.
+- Window management — `main.py` no longer hardcodes window width/height; reads from `config.py` (now the single source of truth) and uses pywebview's `screen=` parameter (targeting the display at origin `(0,0)`) instead of manually computed `x`/`y` for centering.
 
 ---
 
@@ -203,12 +217,13 @@ This project has grown a long conversation history. To keep future sessions fast
 **What to do when starting a new conversation:**
 1. Paste this entire `PROJECT_STATUS.md` file as your first message.
 2. Optionally, also paste the current `style.css` and `vault.css` content if the first task involves visual/theme work.
-3. For anything else (`vault.js`, `main.py`, `security.py`, `database.py`, `login.js`, `login.html`, `vault.html`), do NOT paste them preemptively — per this project's "Current Code Only" rule, Claude should ask for a file's current content before editing it.
+3. For anything else (`vault.js`, `main.py`, `security.py`, `database.py`, `login.js`, `login.html`, `vault.html`, `config.py`), do NOT paste them preemptively — per this project's "Current Code Only" rule, Claude should ask for a file's current content before editing it.
 4. **`vault.js` is now large enough that partial "replace this section" instructions are risky** — always request/provide the complete file for this one specifically, per the incident documented under Images & Videos above.
-5. The immediate next real tasks are: (a) test the Subscriptions feature end-to-end (including Mark as Done / payment history) and commit it, (b) commit the Images & Videos (Folders) feature, both currently uncommitted.
-6. `resizable=False` and the 1200×800 fixed window size are already set in `main.py` — no need to redo this. DevTools no longer auto-opens (`debug=False`).
+5. The immediate next real tasks are: (a) test the Subscriptions feature end-to-end (including Mark as Done / payment history) and commit it, (b) commit the Images & Videos (Folders) feature, (c) commit the Enter-navigation and window-centering fixes — all three currently uncommitted.
+6. `resizable=False` and the 1200×800 fixed window size are already set (now sourced from `config.py`, not hardcoded) — no need to redo this. DevTools no longer auto-opens (`debug=False`). Window centers correctly via pywebview's `screen=` parameter.
 7. The design system (dark theme, Inter font, SVG icon set, spacing/color tokens) is fully established in `style.css`/`vault.css` — ask to see these before making visual changes, rather than guessing.
 8. The notification bell is `position: fixed` at the top-right of the whole window (not inside the sidebar) — keep this in mind for any future sidebar/header layout changes.
 9. If `vault.js` seems to be missing functionality that should exist (e.g. entries not loading, tabs not switching), check whether the file is actually complete before debugging further — this exact failure mode has happened before (see Images & Videos bug notes above) and looks like "everything is broken" with no console errors.
-10. `vault.html`'s `<script src="vault.js?v=4">` cache-busting tag should have its version number bumped any time `vault.js` is updated, to avoid WebView2 serving a stale cached copy (HTTP 304).
+10. `vault.html`'s `<script src="vault.js?v=5">` cache-busting tag should have its version number bumped any time `vault.js` is updated, to avoid WebView2 serving a stale cached copy (HTTP 304). (Missed once already — bumped v4→v5 after Enter-navigation was added; watch for this going forward.)
 11. Subscription dates ("Date Availed"/"Date Ended") are stored as raw `YYYY-MM-DD` text in the database and in the Edit form's `<input type="date">` fields, but are displayed to the user with the month spelled out (e.g. "Aug 31, 2026") via `formatDateForDisplay()` wherever shown read-only (list rows, detail view, payment history, notification dropdown).
+12. `config.py` is now the single source of truth for `WINDOW_WIDTH`/`WINDOW_HEIGHT`/`APP_NAME`, read by `main.py` — don't reintroduce hardcoded window dimensions in `main.py`.
