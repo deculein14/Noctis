@@ -918,8 +918,20 @@ function activateSection(targetSection) {
 }
 
 sidebarItems.forEach((item) => {
-  item.addEventListener("click", () => {
-    activateSection(item.dataset.section);
+  item.addEventListener("click", async () => {
+    const targetSection = item.dataset.section;
+
+    if (targetSection === "wallet") {
+      const entered = await promptForMasterPassword("Enter your master password to open Wallet");
+      if (entered === null) return;
+      const result = await window.pywebview.api.verify_master_password(entered);
+      if (!result.success) {
+        alert(result.message);
+        return;
+      }
+    }
+
+    activateSection(targetSection);
   });
 });
 
