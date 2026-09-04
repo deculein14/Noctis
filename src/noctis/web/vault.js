@@ -527,6 +527,51 @@ function promptForMasterPassword(messageText) {
   });
 }
 
+// ---------- Months-paid confirmation modal (Subscriptions - Mark as Done) ----------
+
+function promptForMonthsPaid(subscriptionName) {
+  return new Promise((resolve) => {
+    openModal(`
+      <p class="modal-title">Mark "${escapeHtml(subscriptionName)}" as Paid</p>
+      <p style="text-align:center; color:#9096A2; font-size:12px; margin-top:-12px;">How many months did you just pay for? (e.g. 1 for monthly, 12 for a year)</p>
+      <div class="modal-field">
+        <label>Months Paid</label>
+        <input type="number" id="months-paid-input" min="1" step="1" value="1">
+      </div>
+      <p class="modal-error" id="months-paid-error"></p>
+      <div class="modal-button-row">
+        <button class="modal-secondary" id="months-paid-cancel">Cancel</button>
+        <button class="modal-primary" id="months-paid-confirm">Confirm</button>
+      </div>
+    `);
+
+    const input = document.getElementById("months-paid-input");
+    input.focus();
+    input.select();
+
+    const cleanup = (value) => {
+      closeModal();
+      resolve(value);
+    };
+
+    const attemptConfirm = () => {
+      const errorLabel = document.getElementById("months-paid-error");
+      const months = parseInt(input.value, 10);
+      if (!months || months < 1) {
+        errorLabel.textContent = "Enter a whole number of months (1 or more).";
+        return;
+      }
+      cleanup(months);
+    };
+
+    document.getElementById("months-paid-cancel").addEventListener("click", () => cleanup(null));
+    document.getElementById("months-paid-confirm").addEventListener("click", attemptConfirm);
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") attemptConfirm();
+    });
+  });
+}
+
 // ---------- Clipboard copy with auto-clear ----------
 
 let lastCopiedText = null;
@@ -1153,6 +1198,8 @@ async function showSubscriptionDetailView(subscriptionId) {
     return;
   }
 
+  const payments = await window.pywebview.api.get_subscription_payments(subscriptionId);
+
   subscriptionsMainView.style.display = "none";
   subscriptionDetailView.style.display = "block";
   fadeInView(subscriptionDetailView);
@@ -1178,8 +1225,8 @@ async function showSubscriptionDetailView(subscriptionId) {
   const coreFieldsHtml =
     subFieldRow("Plan", details.plan) +
     subFieldRow("Amount", formatPHP(details.amount)) +
-    subFieldRow("Date Availed", details.date_started) +
-    subFieldRow("Date Ended", details.date_ended);
+    subFieldRow("Date Availed", formatDateForDisplay(details.date_started)) +
+    subFieldRow("Date Ended", formatDateForDisplay(details.date_ended));
 
   const privileges = details.privileges || [];
   const privilegesHtml = privileges.length > 0
@@ -1193,6 +1240,24 @@ async function showSubscriptionDetailView(subscriptionId) {
 
   const extraFieldsHtml = details.fields.map(({ label, value }) => subFieldRow(label, value)).join("");
 
+  const paymentHistoryHtml = payments.length > 0
+    ? `
+      <div class="detail-section-label">Payment History</div>
+      <div class="payment-history-list">
+        ${payments.map((p) => `
+          <div class="detail-field payment-history-item">
+            <div class="detail-field-label-row">
+              <span class="detail-field-label">${p.months_paid} month${p.months_paid > 1 ? "s" : ""} paid</span>
+            </div>
+            <div class="detail-field-value-row">
+              <span class="detail-field-value">${escapeHtml(formatDateForDisplay(p.previous_due_date))} \u2192 ${escapeHtml(formatDateForDisplay(p.new_due_date))}</span>
+            </div>
+          </div>
+        `).join("")}
+      </div>
+    `
+    : "";
+
   subscriptionDetailView.innerHTML = `
     <div class="detail-card">
       <div class="detail-hero">
@@ -1205,10 +1270,14 @@ async function showSubscriptionDetailView(subscriptionId) {
       ${coreFieldsHtml}
       ${privilegesHtml}
       ${extraFieldsHtml ? `<div class="detail-section-label">Additional Information</div>${extraFieldsHtml}` : ""}
+      ${paymentHistoryHtml}
 
       <div class="detail-secondary-row">
+        <button type="button" class="modal-secondary" id="sub-mark-paid-btn">Mark as Done</button>
         <button type="button" class="danger-text" id="sub-delete-btn">Delete</button>
       </div>
+
+      <p class="detail-error" id="sub-mark-paid-error"></p>
 
       <div class="detail-button-row">
         <button class="modal-secondary" id="sub-back-btn">Back</button>
@@ -1218,6 +1287,28 @@ async function showSubscriptionDetailView(subscriptionId) {
   `;
 
   document.getElementById("sub-back-btn").addEventListener("click", showSubscriptionsMainView);
+
+  document.getElementById("sub-mark-paid-btn").addEventListener("click", async () => {
+    const errorLabel = document.getElementById("sub-mark-paid-error");
+    errorLabel.textContent = "";
+
+    if (!details.date_ended) {
+      errorLabel.textContent = 'This subscription has no "Date Ended" set yet. Edit it and set a date first, then mark it as paid.';
+      return;
+    }
+
+    const months = await promptForMonthsPaid(details.name);
+    if (months === null) return;
+
+    const result = await window.pywebview.api.mark_subscription_paid(subscriptionId, months);
+    if (!result.success) {
+      errorLabel.textContent = result.message;
+      return;
+    }
+
+    showSubscriptionDetailView(subscriptionId);
+    refreshNotifications();
+  });
 
   document.getElementById("sub-delete-btn").addEventListener("click", async () => {
     const confirmed = confirm(`Are you sure you want to delete "${details.name}"? This cannot be undone.`);

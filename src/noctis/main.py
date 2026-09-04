@@ -315,6 +315,35 @@ class Api:
         database.delete_subscription(self.current_username, subscription_id)
         return {"success": True}
 
+    def mark_subscription_paid(self, subscription_id, months_paid):
+        try:
+            months_paid = int(months_paid)
+        except (TypeError, ValueError):
+            return {"success": False, "message": "Enter a whole number of months."}
+
+        if months_paid < 1:
+            return {"success": False, "message": "Months paid must be at least 1."}
+
+        try:
+            new_due_date = database.mark_subscription_paid(self.current_username, subscription_id, months_paid)
+        except ValueError as e:
+            return {"success": False, "message": str(e)}
+
+        return {"success": True, "new_due_date": new_due_date}
+
+    def get_subscription_payments(self, subscription_id):
+        rows = database.get_subscription_payments(self.current_username, subscription_id)
+        return [
+            {
+                "id": row["id"],
+                "months_paid": row["months_paid"],
+                "previous_due_date": row["previous_due_date"],
+                "new_due_date": row["new_due_date"],
+                "paid_at": row["paid_at"],
+            }
+            for row in rows
+        ]
+
     # ---------- Folders (Images & Videos) ----------
 
     def get_folders(self):
@@ -490,7 +519,7 @@ def main():
         height=800,
         resizable=False,
     )
-    webview.start(debug=True)
+    webview.start(debug=False)
 
 
 if __name__ == "__main__":
