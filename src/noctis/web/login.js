@@ -175,8 +175,36 @@ submitButton.addEventListener("click", async () => {
   }
 });
 
-passwordInput.addEventListener("keydown", (event) => {
-  if (event.key === "Enter") {
+// ---------- Enter-to-next-field navigation ----------
+//
+// Field order depends on the current mode, since email/confirm-password are
+// hidden in login mode and everything but the code field is disabled while
+// awaiting the verification code. Pressing Enter in the last field of the
+// current mode submits the form (same as clicking submitButton).
+
+function getFieldOrder() {
+  if (mode === "login") return [usernameInput, passwordInput];
+  if (mode === "register") return [emailInput, usernameInput, passwordInput, confirmPasswordInput];
+  if (mode === "awaiting_code") return [codeInput];
+  return [];
+}
+
+function handleEnterNavigation(event) {
+  if (event.key !== "Enter") return;
+
+  const order = getFieldOrder();
+  const index = order.indexOf(event.target);
+  if (index === -1) return;
+
+  event.preventDefault();
+
+  if (index < order.length - 1) {
+    order[index + 1].focus();
+  } else {
     submitButton.click();
   }
+}
+
+[usernameInput, emailInput, passwordInput, confirmPasswordInput, codeInput].forEach((input) => {
+  input.addEventListener("keydown", handleEnterNavigation);
 });

@@ -52,6 +52,44 @@ document.addEventListener("keydown", (event) => {
   }
 });
 
+// ---------- Enter-to-next-field navigation (applies to every modal form) ----------
+//
+// Works for any modal rendered into modalBox: Account, Subscription, Folder,
+// Category, the master-password prompt, and the months-paid prompt. Pressing
+// Enter in a text-like field moves focus to the next eligible field in DOM
+// order; pressing Enter in the last field clicks the modal's primary button
+// (".modal-primary"). Field lists are re-queried on every keypress, so
+// dynamically added fields (e.g. custom fields, privileges) are included
+// automatically without any extra wiring.
+
+function handleModalEnterKey(event) {
+  if (event.key !== "Enter") return;
+
+  const target = event.target;
+  if (target.tagName !== "INPUT") return;
+  if (target.type === "radio" || target.type === "checkbox") return;
+
+  const fields = Array.from(modalBox.querySelectorAll("input")).filter(
+    (el) => el.type !== "radio" && el.type !== "checkbox" && !el.disabled && el.offsetParent !== null
+  );
+
+  const index = fields.indexOf(target);
+  if (index === -1) return;
+
+  event.preventDefault();
+
+  if (index < fields.length - 1) {
+    const nextField = fields[index + 1];
+    nextField.focus();
+    if (typeof nextField.select === "function") nextField.select();
+  } else {
+    const primaryButton = modalBox.querySelector(".modal-primary:not(:disabled)");
+    if (primaryButton) primaryButton.click();
+  }
+}
+
+modalBox.addEventListener("keydown", handleModalEnterKey);
+
 // ---------- Data loading ----------
 
 async function loadEntries() {
@@ -521,9 +559,6 @@ function promptForMasterPassword(messageText) {
 
     document.getElementById("master-password-cancel").addEventListener("click", () => cleanup(null));
     document.getElementById("master-password-confirm").addEventListener("click", () => cleanup(input.value));
-    input.addEventListener("keydown", (event) => {
-      if (event.key === "Enter") cleanup(input.value);
-    });
   });
 }
 
@@ -566,9 +601,6 @@ function promptForMonthsPaid(subscriptionName) {
 
     document.getElementById("months-paid-cancel").addEventListener("click", () => cleanup(null));
     document.getElementById("months-paid-confirm").addEventListener("click", attemptConfirm);
-    input.addEventListener("keydown", (event) => {
-      if (event.key === "Enter") attemptConfirm();
-    });
   });
 }
 

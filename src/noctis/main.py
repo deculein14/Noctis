@@ -6,7 +6,7 @@ import uuid
 import webview
 from pathlib import Path
 
-from noctis import database, security
+from noctis import config, database, security
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"}
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv", ".webm"}
@@ -509,16 +509,40 @@ def get_web_path(filename):
     return os.path.join(base_dir, "web", filename)
 
 
+def _get_primary_screen():
+    """
+    Returns the Screen whose origin is (0, 0) - Windows' way of marking the
+    actual primary/active display. webview.screens[0] is NOT reliably the
+    primary screen (enumeration order isn't guaranteed), so we search for it
+    explicitly instead of assuming index 0.
+    """
+    screens = webview.screens
+    if not screens:
+        return None
+    for s in screens:
+        if s.x == 0 and s.y == 0:
+            return s
+    return screens[0]
+
+
 def main():
     api = Api()
-    webview.create_window(
-        "Noctis",
-        get_web_path("login.html"),
+
+    create_kwargs = dict(
         js_api=api,
-        width=1200,
-        height=800,
+        width=config.WINDOW_WIDTH,
+        height=config.WINDOW_HEIGHT,
         resizable=False,
     )
+
+    target_screen = _get_primary_screen()
+    if target_screen is not None:
+        # Passing "screen" lets pywebview center the window on that screen
+        # itself, using its own DPI-aware math (it accounts for the screen's
+        # x/y offset internally) - more reliable than computing x/y ourselves.
+        create_kwargs["screen"] = target_screen
+
+    webview.create_window(config.APP_NAME, get_web_path("login.html"), **create_kwargs)
     webview.start(debug=False)
 
 
