@@ -173,6 +173,7 @@ function renderEntries() {
 function buildEntryRow(entry) {
   const row = document.createElement("div");
   row.className = "entry-row";
+  row.style.cursor = "pointer";
 
   const info = document.createElement("div");
   info.className = "entry-info";
@@ -185,18 +186,25 @@ function buildEntryRow(entry) {
   const viewButton = document.createElement("button");
   viewButton.className = "action-button";
   viewButton.textContent = "View";
-  viewButton.addEventListener("click", () => {
+  viewButton.addEventListener("click", (event) => {
+    event.stopPropagation();
     showDetailView(entry.id);
   });
   actions.appendChild(viewButton);
 
   row.appendChild(actions);
+
+  row.addEventListener("dblclick", () => {
+    showDetailView(entry.id);
+  });
+
   return row;
 }
 
 function buildGroupRow(groupEntries) {
   const row = document.createElement("div");
   row.className = "entry-row";
+  row.style.cursor = "pointer";
 
   const info = document.createElement("div");
   info.className = "entry-info";
@@ -209,12 +217,18 @@ function buildGroupRow(groupEntries) {
   const viewButton = document.createElement("button");
   viewButton.className = "action-button";
   viewButton.textContent = "View";
-  viewButton.addEventListener("click", () => {
+  viewButton.addEventListener("click", (event) => {
+    event.stopPropagation();
     showGroupList(groupEntries);
   });
   actions.appendChild(viewButton);
 
   row.appendChild(actions);
+
+  row.addEventListener("dblclick", () => {
+    showGroupList(groupEntries);
+  });
+
   return row;
 }
 
@@ -652,7 +666,7 @@ async function renderGroupList(groupEntries) {
   const rowsHtml = groupEntries.map((entry, index) => {
     const label = entry.username || entry.email || `Account ${index + 1}`;
     return `
-      <div class="group-account-row" data-id="${entry.id}">
+      <div class="group-account-row" data-id="${entry.id}" style="cursor:pointer;">
         <span class="group-account-label">${escapeHtml(label)}</span>
         <div class="entry-actions">
           <button class="action-button group-view" data-id="${entry.id}">View</button>
@@ -671,8 +685,16 @@ async function renderGroupList(groupEntries) {
   `;
 
   document.querySelectorAll(".group-view").forEach((button) => {
-    button.addEventListener("click", () => {
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
       const entryId = parseInt(button.dataset.id, 10);
+      showDetailView(entryId);
+    });
+  });
+
+  document.querySelectorAll(".group-account-row").forEach((row) => {
+    row.addEventListener("dblclick", () => {
+      const entryId = parseInt(row.dataset.id, 10);
       showDetailView(entryId);
     });
   });
