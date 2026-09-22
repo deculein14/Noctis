@@ -1,7 +1,7 @@
 # Noctis — Project Status
 
 ## Current Step
-Images & Videos section (Folders) is built and tested. Subscriptions feature has been extended with Mark as Done / payment history. Enter-to-next-field navigation added across all forms. Window centering fixed. This followed the pywebview UI migration (see Completed Steps 1-21) and the Subscriptions feature build-out. Testing the Subscriptions feature end-to-end is still pending.
+Images & Videos section (Folders) is built and tested. Subscriptions feature has been extended with Mark as Done / payment history. Enter-to-next-field navigation added across all forms. Window centering fixed. `vault.js` has been split into 8 modules under `web/js/` (code-complete, testing pending). This followed the pywebview UI migration (see Completed Steps 1-21) and the Subscriptions feature build-out. Testing the Subscriptions feature end-to-end is still pending.
 
 ### Why the pywebview pivot happened (background)
 User wanted real CSS animations/hover transitions, which tkinter cannot do (no animation/transition system). Confirmed via a working pywebview proof-of-concept before committing to the migration. This aligns Noctis's stack with how real commercial password managers (1Password, Bitwarden) build their desktop UIs (HTML/CSS/JS wrapped in a native window), using a lighter Python-friendly tool (pywebview) instead of Electron/Node.js.
@@ -117,16 +117,22 @@ User wanted real CSS animations/hover transitions, which tkinter cannot do (no a
     - **Bug fixed:** pywebview's `create_file_dialog` file-type filter rejects `&` characters in the filter label (`"Images & Videos (...)"` threw `ValueError`) — renamed to `"Media Files (...)"`.
     - **Bug fixed:** an in-conversation instruction to "replace this section of vault.js" was interpreted as replacing the *entire file* with just that section, silently deleting all Accounts/Subscriptions/notification code. Everything broke at once (no entries, can't switch tabs, notifications dead) with zero console errors, since the file was syntactically valid — just incomplete. Diagnosed via the Network tab showing `vault.js` still loading successfully while functionality was missing, pointing to file *content* rather than caching/path. **Rule going forward: always request/provide the complete `vault.js` file, never a "replace this section" instruction** — this file is large enough that a partial swap easily loses unrelated code silently.
     - Also fixed along the way: a browser-cache issue where WebView2 served a stale cached `vault.js` (HTTP 304) after edits — fixed with a cache-busting query string (`vault.js?v=2`) on the `<script>` tag in `vault.html`; bump the version number after future `vault.js` edits if this recurs. (Now at `v=5` — see Completed Steps 22-23. Was missed once, briefly, between v4 and v5 — see Handoff Notes.)
+22. `vault.js` module split:
+    - An earlier attempt to split `vault.js` via Cursor (Grok 4.6) auto-generated a `_split_vault.py` script that copied content into `web/js/*.js` files without wiring them into `vault.html`; original `vault.js` was untouched. Discarded (deleted) unused rather than risk an unverified automated split.
+    - Redone deliberately with a manual function-by-function inventory: `vault.js` split into `web/js/util.js` (pure helpers: escapeHtml, copyText, flashCopied, getAvatarColor, fadeInView, formatPHP, resetScroll), `modal.js` (generic modal system: openModal/closeModal, Enter-key nav, Escape-key handler, promptForMasterPassword), `accounts.js` (Accounts section: list, search, categories, account form, detail/edit/group views), `subscriptions.js` (Subscriptions section incl. promptForMonthsPaid), `media.js` (Folders/Images & Videos section), `notifications.js` (renewal bell), `shell.js` (sidebar `activateSection` + nav click handling incl. Wallet master-password gate), `boot.js` (final `pywebviewready`/`loadEntries`/`refreshNotifications` init block, must load last).
+    - `vault.html` updated to load all 8 files via ordered `<script>` tags (`util.js` → `modal.js` → `accounts.js` → `subscriptions.js` → `media.js` → `notifications.js` → `shell.js` → `boot.js`, each `?v=1`) in place of the single `vault.js?v=6` tag. Files share one global scope (no bundler/ES modules); load order matters only for top-level code that runs immediately, not for function bodies.
+    - Old `vault.js` intentionally left in place on disk (not yet renamed/deleted) as a fallback until the split is manually verified.
 
 ## Current Task
-Testing the Subscriptions feature end-to-end (add/edit/view/delete cycle including Privileges, custom fields, PHP amount, Mark as Done/payment history, and the notification bell's 30/7/3/1-day triggers) — still outstanding.
+Verifying the `vault.js` → modular JS split (`web/js/util.js`, `modal.js`, `accounts.js`, `subscriptions.js`, `media.js`, `notifications.js`, `shell.js`, `boot.js`) works identically to the original before removing the old `vault.js`. Code migration is complete (all functions accounted for, `vault.html` updated to load the 8 files in dependency order); full manual testing of every feature is still pending. The old monolithic `vault.js` is still present on disk as a fallback and has NOT been renamed/deleted yet.
 
 ## Next Planned Step
-1. Test the complete Subscriptions feature end-to-end (including Mark as Done / payment history), clean up any test data, then `git add`/`commit`/`push`.
-2. `git add`/`commit`/`push` the Images & Videos (Folders) feature, which has also not yet been committed.
-3. `git add`/`commit`/`push` the Enter-to-next-field navigation and window centering fixes, which have also not yet been committed.
-4. Build out the remaining empty sidebar section (Settings — no spec discussed yet).
-5. Longer-term: resume the original roadmap — Testing, Error Handling, Packaging, Final Security Review, v0.1.0 Release.
+1. Manually test the `vault.js` module split end-to-end (Accounts, Subscriptions, Media, Notifications, Sidebar/Wallet gate, modal Enter/Escape behavior). Once confirmed working, rename the old `vault.js` to `vault.js.bak`, retest, then commit the split as its own commit and delete the backup.
+2. Test the complete Subscriptions feature end-to-end (including Mark as Done / payment history), clean up any test data, then `git add`/`commit`/`push`.
+3. `git add`/`commit`/`push` the Images & Videos (Folders) feature, which has also not yet been committed.
+4. `git add`/`commit`/`push` the Enter-to-next-field navigation and window centering fixes, which have also not yet been committed.
+5. Build out the remaining empty sidebar section (Settings — no spec discussed yet).
+6. Longer-term: resume the original roadmap — Testing, Error Handling, Packaging, Final Security Review, v0.1.0 Release.
 
 ## Technology Stack
 - Language: Python 3.14.5
@@ -173,11 +179,13 @@ Testing the Subscriptions feature end-to-end (add/edit/view/delete cycle includi
 - Inserted media files are **moved** (not copied) from their original location into Noctis's own per-user storage folder, so Noctis becomes the only copy and the original location no longer has the file. Files are stored unencrypted on disk — an explicit trade-off for simplicity and instant view/playback, accepted after discussing that encryption would require decrypt-to-temp-file complexity, especially for video playback.
 - Subscription "Mark as Done" advances the due date from the subscription's own current due date (not from today), so the billing schedule stays consistent even if logged a few days late; each payment is logged in a permanent history list rather than silently overwriting the date.
 - Window size is defined once in `config.py` (`WINDOW_WIDTH`/`WINDOW_HEIGHT`) and read by `main.py`, rather than hardcoded separately in both places — avoids the two values silently drifting out of sync (as `config.py` previously had, unnoticed, with stale 620×780 values while the app actually ran at 1200×800).
+- `vault.js` was split into 8 focused modules under `web/js/` for maintainability, using a manual function-by-function inventory (not an automated tool) after an earlier automated split attempt was discarded unused. Modules share one global scope via ordered `<script>` tags rather than a bundler/ES modules, keeping the setup simple for a beginner workflow.
 
 ## Known Issues
 None currently outstanding for built features. (Previously flagged horizontal-scroll/content-cutoff bug from notification navigation has been fixed; previously flagged base64/`file:///` media display bug has been fixed; previously flagged stale-cache and partial-file-replacement incidents during the Folders build have been fixed and their lessons documented above; window centering bug on multi-monitor setups has been fixed.)
 
 ## Important Unfinished Work
+- `vault.js` module split (see Architecture Changes) is code-complete but not yet fully tested or committed; old `vault.js` still present as fallback.
 - Subscriptions feature (including the Mark as Done / payment history addition) has not yet been tested end-to-end or committed to Git — this is the immediate next task.
 - Images & Videos (Folders) feature has been built and tested but not yet committed to Git.
 - Enter-to-next-field navigation and window centering/config.py fixes have been built and tested but not yet committed to Git.
@@ -207,6 +215,7 @@ None currently outstanding for built features. (Previously flagged horizontal-sc
 - Database schema (fifth wave) — added a `subscription_payments` table logging each "Mark as Done" action against a subscription.
 - Form UX — unified Enter-key field navigation across every modal form (`vault.js`) and the login/register page (`login.js`), replacing ad-hoc single-field Enter handlers with one general mechanism each.
 - Window management — `main.py` no longer hardcodes window width/height; reads from `config.py` (now the single source of truth) and uses pywebview's `screen=` parameter (targeting the display at origin `(0,0)`) instead of manually computed `x`/`y` for centering.
+- `vault.js` (single ~1400-line file) split into 8 focused modules under `web/js/` (`util.js`, `modal.js`, `accounts.js`, `subscriptions.js`, `media.js`, `notifications.js`, `shell.js`, `boot.js`), loaded via ordered `<script>` tags in `vault.html` (shared global scope, no bundler/ES modules). Split was planned deliberately (function-by-function inventory) after an earlier automated split attempt via a Cursor-generated script was discarded unused.
 
 ---
 
@@ -217,13 +226,13 @@ This project has grown a long conversation history. To keep future sessions fast
 **What to do when starting a new conversation:**
 1. Paste this entire `PROJECT_STATUS.md` file as your first message.
 2. Optionally, also paste the current `style.css` and `vault.css` content if the first task involves visual/theme work.
-3. For anything else (`vault.js`, `main.py`, `security.py`, `database.py`, `login.js`, `login.html`, `vault.html`, `config.py`), do NOT paste them preemptively — per this project's "Current Code Only" rule, Claude should ask for a file's current content before editing it.
-4. **`vault.js` is now large enough that partial "replace this section" instructions are risky** — always request/provide the complete file for this one specifically, per the incident documented under Images & Videos above.
-5. The immediate next real tasks are: (a) test the Subscriptions feature end-to-end (including Mark as Done / payment history) and commit it, (b) commit the Images & Videos (Folders) feature, (c) commit the Enter-navigation and window-centering fixes — all three currently uncommitted.
+3. For anything else (`main.py`, `security.py`, `database.py`, `login.js`, `login.html`, `vault.html`, `config.py`, or any file under `web/js/`), do NOT paste them preemptively — per this project's "Current Code Only" rule, Claude should ask for a file's current content before editing it.
+4. `vault.js` has been split into 8 modules under `web/js/` (see Architecture Changes) — this note previously said to treat `vault.js` as one large file requiring full-file replacement; that's now historical. Going forward, ask which specific module file is relevant (e.g. "please send the current `web/js/accounts.js`") rather than the old monolithic file. The full-file-only rule still applies per module.
+5. The immediate next real tasks are: (a) manually test and finish committing the `vault.js` module split, (b) test the Subscriptions feature end-to-end (including Mark as Done / payment history) and commit it, (c) commit the Images & Videos (Folders) feature, (d) commit the Enter-navigation and window-centering fixes — all currently uncommitted.
 6. `resizable=False` and the 1200×800 fixed window size are already set (now sourced from `config.py`, not hardcoded) — no need to redo this. DevTools no longer auto-opens (`debug=False`). Window centers correctly via pywebview's `screen=` parameter.
 7. The design system (dark theme, Inter font, SVG icon set, spacing/color tokens) is fully established in `style.css`/`vault.css` — ask to see these before making visual changes, rather than guessing.
 8. The notification bell is `position: fixed` at the top-right of the whole window (not inside the sidebar) — keep this in mind for any future sidebar/header layout changes.
-9. If `vault.js` seems to be missing functionality that should exist (e.g. entries not loading, tabs not switching), check whether the file is actually complete before debugging further — this exact failure mode has happened before (see Images & Videos bug notes above) and looks like "everything is broken" with no console errors.
-10. `vault.html`'s `<script src="vault.js?v=5">` cache-busting tag should have its version number bumped any time `vault.js` is updated, to avoid WebView2 serving a stale cached copy (HTTP 304). (Missed once already — bumped v4→v5 after Enter-navigation was added; watch for this going forward.)
+9. If a `web/js/` module seems to be missing functionality that should exist (e.g. entries not loading, tabs not switching), check whether the file is actually complete before debugging further — this exact failure mode happened once with the old monolithic `vault.js` (see Images & Videos bug notes above) and looked like "everything is broken" with no console errors.
+10. `vault.html` loads 8 separate `web/js/*.js?v=1` files (see Architecture Changes) instead of a single `vault.js?v=N` tag. Bump the relevant module's version number any time that specific file is updated, to avoid WebView2 serving a stale cached copy (HTTP 304).
 11. Subscription dates ("Date Availed"/"Date Ended") are stored as raw `YYYY-MM-DD` text in the database and in the Edit form's `<input type="date">` fields, but are displayed to the user with the month spelled out (e.g. "Aug 31, 2026") via `formatDateForDisplay()` wherever shown read-only (list rows, detail view, payment history, notification dropdown).
 12. `config.py` is now the single source of truth for `WINDOW_WIDTH`/`WINDOW_HEIGHT`/`APP_NAME`, read by `main.py` — don't reintroduce hardcoded window dimensions in `main.py`.
