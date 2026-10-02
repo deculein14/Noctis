@@ -265,6 +265,28 @@ body.app-body {
   line-height: 1.4;
 }
 
+.recovery-warning {
+  background: var(--color-danger-soft);
+  border: 1px solid rgba(240, 87, 107, 0.32);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+  margin: 0 0 var(--space-4) 0;
+  padding: var(--space-3);
+}
+
+.recovery-warning-title {
+  color: var(--color-danger);
+  font-size: 12px;
+  font-weight: 650;
+  margin: 0 0 var(--space-1) 0;
+}
+
+.recovery-warning p:last-child {
+  margin: 0;
+}
+
 .primary-button {
   width: 100%;
   background: var(--color-accent);

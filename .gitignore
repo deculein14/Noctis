@@ -15,6 +15,9 @@ login_guards.json
 pending_verifications.json
 account_log.txt
 
+# User-imported media must remain local and never be committed.
+media_*/
+
 # OS junk files
 Thumbs.db
 .DS_Store

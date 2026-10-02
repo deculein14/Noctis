@@ -14,6 +14,7 @@ const confirmPasswordInput = document.getElementById("confirm-password-input");
 const toggleConfirmPassword = document.getElementById("toggle-confirm-password");
 const codeField = document.getElementById("code-field");
 const codeInput = document.getElementById("code-input");
+const recoveryWarning = document.getElementById("recovery-warning");
 
 let pendingRegistration = null;
 
@@ -23,6 +24,7 @@ function updateModeDisplay() {
     modeSubtitle.textContent = "Log in to your vault";
     emailField.style.display = "none";
     confirmPasswordField.style.display = "none";
+    recoveryWarning.style.display = "none";
     confirmPasswordInput.value = "";
     codeField.style.display = "none";
     codeInput.value = "";
@@ -37,6 +39,7 @@ function updateModeDisplay() {
     modeSubtitle.textContent = "Create a new account";
     emailField.style.display = "block";
     confirmPasswordField.style.display = "block";
+    recoveryWarning.style.display = "block";
     codeField.style.display = "none";
     usernameInput.disabled = false;
     emailInput.disabled = false;
@@ -48,6 +51,7 @@ function updateModeDisplay() {
   } else if (mode === "awaiting_code") {
     modeSubtitle.textContent = `We sent a 6-digit code to ${pendingRegistration.email}`;
     codeField.style.display = "block";
+    recoveryWarning.style.display = "block";
     usernameInput.disabled = true;
     emailInput.disabled = true;
     passwordInput.disabled = true;
